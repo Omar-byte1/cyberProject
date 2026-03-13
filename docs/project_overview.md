@@ -154,6 +154,33 @@ graph TD
 
 ## 9. Guide d'Intégration et Lancement
 
+### CI/CD et Pipelines de Déploiement
+
+Le projet suit un flux de travail Git standard pour assurer la stabilité du code.
+
+```mermaid
+graph LR
+    A[Modification Code] --> B[Tests Locaux]
+    B --> C[Git Add / Commit]
+    C --> D[Git Push]
+    D --> E[GitHub Repository]
+```
+
+### Commandes Git pour la mise à jour du projet
+
+Pour mettre à jour le projet et envoyer les modifications sur GitHub, utilisez les commandes suivantes dans votre terminal :
+
+```powershell
+# 1. Ajouter toutes les modifications
+git add .
+
+# 2. Créer un commit avec un message descriptif
+git commit -m "Description de vos modifications (ex: Mise à jour du dashboard)"
+
+# 3. Pousser les modifications sur la branche master
+git push origin master
+```
+
 ### Lancement du Projet
 
 **Étape 1 : Lancer le Backend (API FastAPI)**
