@@ -1,0 +1,1 @@
+AlienVault OTX (Open Threat Exchange) est une plate-forme de partage de renseignements sur les menaces.

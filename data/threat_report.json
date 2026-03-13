@@ -1,0 +1,23 @@
+[
+    {
+        "cve_id": "CVE-1999-0095",
+        "log_source": "2023-10-27 10:05:00,CRITICAL,Attack attempt with CVE-1999-0095 detected from IP 185.22.1.4",
+        "prediction": "Exploitation potentielle de la vulnérabilité CVE-1999-0095",
+        "recommendation": "Appliquer les correctifs de sécurité immédiatement.",
+        "soc_level": "SOC Level 3 - Critical Threat"
+    },
+    {
+        "cve_id": "ML-ANOMALY",
+        "log_source": "2023-10-27 10:03:00,ERROR,Connection to malicious domain evil.com detected from 192.168.1.102",
+        "prediction": "Comportement anormal détecté par l'IA (Machine Learning)",
+        "recommendation": "Investiguer manuellement le log pour confirmer l'intrusion.",
+        "soc_level": "SOC Level 2 - High Risk"
+    },
+    {
+        "cve_id": "ML-ANOMALY",
+        "log_source": "2023-10-27 10:12:00,CRITICAL,Suspicious command executed: 'rm -rf /' by user anonymous",
+        "prediction": "Comportement anormal détecté par l'IA (Machine Learning)",
+        "recommendation": "Investiguer manuellement le log pour confirmer l'intrusion.",
+        "soc_level": "SOC Level 2 - High Risk"
+    }
+]

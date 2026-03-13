@@ -1,0 +1,1 @@
+MISP (Malware Information Sharing Platform) est une plate-forme open source de partage de renseignements sur les menaces.

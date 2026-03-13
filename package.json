@@ -1,0 +1,12 @@
+{
+  "name": "cyber-threat-ai-project",
+  "version": "1.0.0",
+  "description": "Professional AI-driven cybersecurity threat analysis platform.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,13 @@
+2023-10-27 10:00:00,INFO,Login successful for user admin from IP 192.168.1.100
+2023-10-27 10:01:00,WARNING,Failed login attempt for user guest from IP 10.0.0.5
+2023-10-27 10:02:00,INFO,File access: /etc/passwd by user admin
+2023-10-27 10:03:00,ERROR,Connection to malicious domain evil.com detected from 192.168.1.102
+2023-10-27 10:04:00,INFO,Vulnerability scan detected CVE-2021-44228 on server 10.0.0.10
+2023-10-27 10:05:00,CRITICAL,Attack attempt with CVE-1999-0095 detected from IP 185.22.1.4
+2023-10-27 10:06:00,INFO,User 'user1' logged in from IP 192.168.1.50
+2023-10-27 10:07:00,INFO,File read: /home/user1/report.pdf by user1
+2023-10-27 10:08:00,INFO,User 'user2' logged in from IP 192.168.1.51
+2023-10-27 10:09:00,INFO,API request: GET /api/v1/status from IP 192.168.1.52
+2023-10-27 10:10:00,INFO,User 'user1' logged out
+2023-10-27 10:11:00,INFO,System health check: OK
+2023-10-27 10:12:00,CRITICAL,Suspicious command executed: 'rm -rf /' by user anonymous

@@ -1,0 +1,1 @@
+La National Vulnerability Database (NVD) est un référentiel de données de gestion des vulnérabilités basé sur des normes.
