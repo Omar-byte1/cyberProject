@@ -28,10 +28,19 @@ class AIEngine:
             severity = alert.get("severity", 0)
             log_content = alert.get("log", "")
 
+            # Threat score (simple)
+            anomaly_score = 1 if cve_id == "ML-ANOMALY" else 0
+            try:
+                base_severity = float(severity)
+            except (ValueError, TypeError):
+                base_severity = 0
+
+            threat_score = base_severity + anomaly_score
+
             # Détermination du niveau SOC
-            if severity >= 9:
+            if threat_score >= 9:
                 level = "SOC Level 3 - Critical Threat"
-            elif severity >= 7:
+            elif threat_score >= 7:
                 level = "SOC Level 2 - High Risk"
             else:
                 level = "SOC Level 1 - Warning"
@@ -47,6 +56,9 @@ class AIEngine:
             insight = {
                 "cve_id": cve_id,
                 "log_source": log_content,
+                "severity": base_severity,
+                "anomaly_score": anomaly_score,
+                "threat_score": threat_score,
                 "prediction": prediction,
                 "recommendation": recommendation,
                 "soc_level": level

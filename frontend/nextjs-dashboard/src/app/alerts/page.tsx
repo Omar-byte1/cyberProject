@@ -61,6 +61,7 @@ export default function AlertsPage() {
                 <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Indicator</th>
                 <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Log Detail</th>
                 <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Detection Type</th>
+                <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Threat Score</th>
                 <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Risk Score</th>
                 <th className="px-8 py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Action</th>
               </tr>
@@ -96,11 +97,16 @@ export default function AlertsPage() {
                     </span>
                   </td>
                   <td className="px-8 py-6 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${alert.threat_score >= 9 ? 'bg-red-100 text-red-600' : alert.threat_score >= 7 ? 'bg-orange-100 text-orange-600' : 'bg-yellow-100 text-amber-700'}`}>
+                      {alert.threat_score ?? Math.round((alert.severity || 0) + (alert.cve_id === 'ML-ANOMALY' ? 1 : 0))}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 whitespace-nowrap">
                     <div className="flex items-center gap-4">
                       <div className="flex-1 w-20 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                         <div 
-                          className={`h-full rounded-full bg-gradient-to-r transition-all duration-1000 ease-out ${alert.severity >= 8 ? 'from-red-400 to-rose-600' : 'from-orange-400 to-amber-600'}`}
-                          style={{ width: `${alert.severity * 10}%` }}
+                          className={`h-full rounded-full bg-gradient-to-r transition-all duration-1000 ease-out ${(alert.severity || 0) >= 8 ? 'from-red-400 to-rose-600' : 'from-orange-400 to-amber-600'}`}
+                          style={{ width: `${(alert.severity || 0) * 10}%` }}
                         ></div>
                       </div>
                       <span className="text-sm font-black text-slate-900 w-8">{alert.severity}</span>

@@ -3,7 +3,7 @@ import json
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.ai_engine import AIEngine
+from .ai_engine import AIEngine
 
 app = FastAPI(title="Cyber Threat Intelligence API")
 
@@ -68,4 +68,4 @@ def get_alerts():
 
 if __name__ == "__main__":
     # Lancement du serveur uvicorn
-    uvicorn.run("backend.api:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
