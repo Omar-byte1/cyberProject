@@ -1,30 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   AlertTriangle, 
   Shield, 
   Search, 
   Filter,
-  ExternalLink,
   ChevronRight,
   Activity
 } from 'lucide-react';
 
+type AlertItem = {
+  cve_id: string;
+  log: string;
+  alert: string;
+  threat_score?: number;
+  severity?: number;
+};
+
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/alerts')
       .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setAlerts(data);
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const validated = data.filter((item): item is AlertItem => {
+            if (typeof item !== 'object' || item === null) return false;
+            const obj = item as Record<string, unknown>;
+            return typeof obj.cve_id === 'string' &&
+              typeof obj.log === 'string' &&
+              typeof obj.alert === 'string' &&
+              (typeof obj.threat_score === 'undefined' || typeof obj.threat_score === 'number') &&
+              (typeof obj.severity === 'undefined' || typeof obj.severity === 'number');
+          });
+          setAlerts(validated);
+        }
       })
       .catch(err => console.error(err));
   }, []);
 
-  const filteredAlerts = alerts.filter((alert: any) => 
+  const filteredAlerts = alerts.filter((alert) =>
     alert.cve_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     alert.log.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -67,7 +85,7 @@ export default function AlertsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-50">
-              {filteredAlerts.map((alert: any, idx) => (
+              {filteredAlerts.map((alert, idx) => (
                 <tr key={idx} className="hover:bg-blue-50/30 transition-all group cursor-default">
                   <td className="px-8 py-6 whitespace-nowrap">
                     <div className="flex items-center gap-4">
@@ -136,8 +154,8 @@ export default function AlertsPage() {
   );
 }
 
-function Activity(props: any) {
+function Activity(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-  )
+  );
 }

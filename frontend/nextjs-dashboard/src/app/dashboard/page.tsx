@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { 
   ShieldAlert, 
   Activity, 
@@ -48,16 +47,25 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  const fetchData = async () => {
+  type AlertStatItem = {
+    cve_id?: string;
+  };
+
+  const isAlertStatItem = useCallback((value: unknown): value is AlertStatItem => {
+    return typeof value === 'object' && value !== null;
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const res = await fetch('http://127.0.0.1:8000/alerts');
       const data = await res.json();
       if (Array.isArray(data)) {
-        const mlAnomalies = data.filter((a: any) => a.cve_id === 'ML-ANOMALY').length;
+        const validatedItems = data.filter(isAlertStatItem);
+        const mlAnomalies = validatedItems.filter((a) => a.cve_id === 'ML-ANOMALY').length;
         setStats({
-          total_alerts: data.length,
-          critical_cves: data.filter((a: any) => a.cve_id && a.cve_id.startsWith('CVE')).length,
+          total_alerts: validatedItems.length,
+          critical_cves: validatedItems.filter((a) => typeof a.cve_id === 'string' && a.cve_id.startsWith('CVE')).length,
           ml_anomalies: mlAnomalies,
           soc_level: mlAnomalies > 0 ? 'SOC Level 2 - High Risk' : 'SOC Level 1 - Stable'
         });
@@ -68,11 +76,12 @@ export default function Dashboard() {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [isAlertStatItem]);
+
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const doughnutData = {
     labels: ['CVE Critical', 'ML Anomalies', 'Others'],
@@ -221,7 +230,17 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, gradient, trend, trendUp, isStatus = false }: any) {
+type StatCardProps = {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string;
+  trend: string;
+  trendUp: boolean;
+  isStatus?: boolean;
+};
+
+function StatCard({ title, value, icon: Icon, gradient, trend, trendUp, isStatus = false }: StatCardProps) {
   return (
     <div className="group bg-white p-1 rounded-2xl shadow-lg shadow-slate-200/50 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
       <div className="bg-white p-5 rounded-xl border border-slate-50 flex flex-col h-full">

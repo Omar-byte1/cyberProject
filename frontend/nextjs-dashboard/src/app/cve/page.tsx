@@ -5,28 +5,39 @@ import {
   ShieldAlert, 
   Search, 
   ExternalLink, 
-  BookOpen, 
-  Info, 
   Star 
 } from 'lucide-react';
 
+type CveItem = {
+  cve_id: string;
+  log: string;
+  severity?: string | number;
+};
+
 export default function CveIntelPage() {
-  const [cves, setCves] = useState([]);
+  const [cves, setCves] = useState<CveItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/alerts')
       .then(res => res.json())
-      .then(data => {
+      .then((data) => {
         if (Array.isArray(data)) {
-          const criticalCves = data.filter((a: any) => a.cve_id && a.cve_id.startsWith('CVE'));
+          const criticalCves = data.filter((a): a is CveItem => {
+            if (typeof a !== 'object' || a === null) return false;
+            const obj = a as Record<string, unknown>;
+            return typeof obj.cve_id === 'string' &&
+              typeof obj.log === 'string' &&
+              (typeof obj.severity === 'undefined' || typeof obj.severity === 'string' || typeof obj.severity === 'number') &&
+              obj.cve_id.startsWith('CVE');
+          });
           setCves(criticalCves);
         }
       })
       .catch(err => console.error(err));
   }, []);
 
-  const filteredCves = cves.filter((cve: any) => 
+  const filteredCves = cves.filter((cve) =>
     cve.cve_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -53,7 +64,7 @@ export default function CveIntelPage() {
       </div>
 
       <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 divide-y divide-slate-100">
-        {filteredCves.map((cve: any, idx) => (
+        {filteredCves.map((cve, idx) => (
           <div key={idx} className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-red-50/30 transition-colors">
             <div className="flex items-center gap-5">
               <div className="p-3 rounded-2xl bg-gradient-to-br from-red-100 to-rose-100 text-red-600">

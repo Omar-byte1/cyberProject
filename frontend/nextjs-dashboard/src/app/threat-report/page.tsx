@@ -10,14 +10,31 @@ import {
   ChevronRight 
 } from 'lucide-react';
 
+type ThreatReportItem = {
+  soc_level: string;
+  log_source: string;
+  prediction: string;
+  recommendation: string;
+};
+
 export default function ThreatReportPage() {
-  const [report, setReport] = useState([]);
+  const [report, setReport] = useState<ThreatReportItem[]>([]);
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/threat-report')
       .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setReport(data);
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const validated = data.filter((item): item is ThreatReportItem => {
+            if (typeof item !== 'object' || item === null) return false;
+            const obj = item as Record<string, unknown>;
+            return typeof obj.soc_level === 'string' &&
+                   typeof obj.log_source === 'string' &&
+                   typeof obj.prediction === 'string' &&
+                   typeof obj.recommendation === 'string';
+          });
+          setReport(validated);
+        }
       })
       .catch(err => console.error(err));
   }, []);
@@ -41,7 +58,7 @@ export default function ThreatReportPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {report.map((item: any, idx) => (
+        {report.map((item, idx) => (
           <div key={idx} className="group bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8 flex flex-col hover:-translate-y-2 transition-transform duration-300">
             <div className="flex items-center gap-4 mb-6">
               <div className={`p-3 rounded-2xl bg-gradient-to-br ${getSocLevelStyles(item.soc_level)} text-white shadow-lg shadow-current/20`}>

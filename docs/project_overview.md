@@ -222,3 +222,17 @@ AlienVault
 National Vulnerability Database
 MISP
 Abuse.ch, URLhaus, ThreatFox
+
+## 10. Journal de Modifications (aujourd'hui)
+
+- Page login isolée : `app/login/page.tsx` est maintenant hors dashboard.
+- Redirection racine : `app/page.tsx` redirige vers `/login`.
+- Layout global (`app/layout.tsx`) simplifié.
+- Sidebar conservé pour les pages sécurisées via layouts spécifiques :
+  - `app/dashboard/layout.tsx`
+  - `app/alerts/layout.tsx`
+  - `app/cve/layout.tsx`
+  - `app/threat-report/layout.tsx`
+- Typage strict sur les données front-end (useState<...>, garde-types de validation).
+- Correction des erreurs TypeScript/ESLint `no-explicit-any` et warnings.
+- Lint Clean : `npm run lint` passe sans erreurs.

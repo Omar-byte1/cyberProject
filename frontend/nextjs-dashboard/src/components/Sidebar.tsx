@@ -4,7 +4,6 @@ import {
   AlertCircle, 
   ShieldAlert, 
   FileText, 
-  Settings, 
   ShieldCheck 
 } from 'lucide-react';
 
