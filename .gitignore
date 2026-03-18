@@ -16,6 +16,10 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Fichiers Python cache
+__pycache__/
+*.py[cod]
+
 # Fichiers de l'IDE
 .vscode/
 .idea/

@@ -24,6 +24,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Doughnut, Line } from 'react-chartjs-2';
+import AlertChart from '@/components/AlertChart';
 
 ChartJS.register(
   ArcElement,
@@ -45,6 +46,7 @@ export default function Dashboard() {
     soc_level: 'Stable'
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   type AlertStatItem = {
@@ -57,6 +59,7 @@ export default function Dashboard() {
 
   const fetchData = useCallback(async () => {
     setIsRefreshing(true);
+    setIsLoading(true);
     try {
       const res = await fetch('http://127.0.0.1:8000/alerts');
       const data = await res.json();
@@ -75,6 +78,7 @@ export default function Dashboard() {
       console.error(err);
     } finally {
       setIsRefreshing(false);
+      setIsLoading(false);
     }
   }, [isAlertStatItem]);
 
@@ -129,8 +133,8 @@ export default function Dashboard() {
             Security Overview
           </h1>
           <p className="text-slate-500 mt-2 flex items-center gap-2 font-medium">
-            <Clock className="w-4 h-4 text-blue-500" /> 
-            Last sync: {lastUpdated.toLocaleTimeString()}
+            <Clock className="w-4 h-4 text-blue-500" />
+            {isLoading ? 'Loading data...' : `Last sync: ${lastUpdated.toLocaleTimeString()}`}
           </p>
         </div>
         <div className="flex gap-4">
@@ -150,43 +154,59 @@ export default function Dashboard() {
       </div>
       
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Alerts" 
-          value={stats.total_alerts} 
-          icon={Activity} 
-          gradient="from-blue-500 to-indigo-600"
-          trend="+12%"
-          trendUp={true}
-        />
-        <StatCard 
-          title="Critical CVEs" 
-          value={stats.critical_cves} 
-          icon={ShieldAlert} 
-          gradient="from-rose-500 to-red-600"
-          trend="+5%"
-          trendUp={true}
-        />
-        <StatCard 
-          title="ML Anomalies" 
-          value={stats.ml_anomalies} 
-          icon={Zap} 
-          gradient="from-amber-400 to-orange-500"
-          trend="-2%"
-          trendUp={false}
-        />
-        <StatCard 
-          title="SOC Status" 
-          value={stats.soc_level} 
-          icon={Target} 
-          gradient={stats.soc_level.includes('Stable') ? 'from-emerald-400 to-green-600' : 'from-rose-500 to-red-600'}
-          trend="Live"
-          trendUp={true}
-          isStatus
-        />
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
+          {[1, 2, 3, 4].map((item) => (
+            <div key={item} className="h-28 rounded-2xl bg-slate-800/70 border border-slate-700" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard 
+            title="Total Alerts" 
+            value={stats.total_alerts} 
+            icon={Activity} 
+            gradient="from-blue-500 to-indigo-600"
+            trend="+12%"
+            trendUp={true}
+          />
+          <StatCard 
+            title="Critical CVEs" 
+            value={stats.critical_cves} 
+            icon={ShieldAlert} 
+            gradient="from-rose-500 to-red-600"
+            trend="+5%"
+            trendUp={true}
+          />
+          <StatCard 
+            title="ML Anomalies" 
+            value={stats.ml_anomalies} 
+            icon={Zap} 
+            gradient="from-amber-400 to-orange-500"
+            trend="-2%"
+            trendUp={false}
+          />
+          <StatCard 
+            title="SOC Status" 
+            value={stats.soc_level} 
+            icon={Target} 
+            gradient={stats.soc_level.includes('Stable') ? 'from-emerald-400 to-green-600' : 'from-rose-500 to-red-600'}
+            trend="Live"
+            trendUp={true}
+            isStatus
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {isLoading ? (
+          <div className="h-64 rounded-2xl bg-slate-800/70 border border-slate-700 animate-pulse" />
+        ) : (
+          <AlertChart />
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-1">
         {/* Main Chart */}
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
           <div className="flex items-center justify-between mb-8">
