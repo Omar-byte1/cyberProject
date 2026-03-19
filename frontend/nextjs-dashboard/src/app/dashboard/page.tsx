@@ -39,6 +39,18 @@ ChartJS.register(
 );
 
 export default function Dashboard() {
+  type AlertItem = {
+    cve_id: string;
+    log?: string;
+    severity?: number;
+    soc_level?: string;
+  };
+
+  type AlertStatItem = {
+    cve_id?: string;
+  };
+
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [stats, setStats] = useState({
     total_alerts: 0,
     critical_cves: 0,
@@ -49,15 +61,11 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  type AlertStatItem = {
-    cve_id?: string;
-  };
-
   const isAlertStatItem = useCallback((value: unknown): value is AlertStatItem => {
     return typeof value === 'object' && value !== null;
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchAlerts = useCallback(async () => {
     setIsRefreshing(true);
     setIsLoading(true);
     try {
@@ -65,6 +73,18 @@ export default function Dashboard() {
       const data = await res.json();
       if (Array.isArray(data)) {
         const validatedItems = data.filter(isAlertStatItem);
+        const validatedAlerts: AlertItem[] = validatedItems
+          .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+          .map((item) => {
+            const cveId = typeof item.cve_id === 'string' ? item.cve_id : 'N/A';
+            const log = typeof item.log === 'string' ? item.log : undefined;
+            const severity = typeof item.severity === 'number' ? item.severity : undefined;
+            const socLevel = typeof item.soc_level === 'string' ? item.soc_level : undefined;
+            return { cve_id: cveId, log, severity, soc_level: socLevel };
+          })
+          .filter((a) => a.cve_id !== 'N/A');
+
+        setAlerts(validatedAlerts);
         const mlAnomalies = validatedItems.filter((a) => a.cve_id === 'ML-ANOMALY').length;
         setStats({
           total_alerts: validatedItems.length,
@@ -84,8 +104,8 @@ export default function Dashboard() {
 
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchAlerts();
+  }, [fetchAlerts]);
 
   const doughnutData = {
     labels: ['CVE Critical', 'ML Anomalies', 'Others'],
@@ -139,7 +159,7 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-4">
           <button 
-            onClick={fetchData}
+            onClick={fetchAlerts}
             disabled={isRefreshing}
             className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:scale-105 active:scale-95 transition-all shadow-md shadow-blue-500/20 disabled:opacity-70`}
           >
