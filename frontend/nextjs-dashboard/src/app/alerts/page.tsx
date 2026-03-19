@@ -7,20 +7,47 @@ import {
   Search, 
   Filter,
   ChevronRight,
-  Activity
+ 
 } from 'lucide-react';
 
 type AlertItem = {
   cve_id: string;
   log: string;
   alert: string;
+  soc_level?: string;
   threat_score?: number;
   severity?: number;
 };
 
+const SOC_LEVEL_OPTIONS = [
+  { label: 'All', value: 'ALL' },
+  { label: 'SOC Level 1 - Stable', value: 'SOC Level 1 - Stable' },
+  { label: 'SOC Level 2 - High Risk', value: 'SOC Level 2 - High Risk' },
+  { label: 'SOC Level 3 - Critical Threat', value: 'SOC Level 3 - Critical Threat' },
+] as const;
+
+type SocLevelOption = (typeof SOC_LEVEL_OPTIONS)[number]['value'];
+
+function computeThreatScore(alert: Pick<AlertItem, 'cve_id' | 'severity' | 'threat_score'>): number {
+  if (typeof alert.threat_score === 'number' && Number.isFinite(alert.threat_score)) {
+    return alert.threat_score;
+  }
+  const baseSeverity = typeof alert.severity === 'number' && Number.isFinite(alert.severity) ? alert.severity : 0;
+  const anomalyBonus = alert.cve_id === 'ML-ANOMALY' ? 1 : 0;
+  return baseSeverity + anomalyBonus;
+}
+
+function computeSocLevel(threatScore: number): Exclude<SocLevelOption, 'ALL'> {
+  if (threatScore >= 9) return 'SOC Level 3 - Critical Threat';
+  if (threatScore >= 7) return 'SOC Level 2 - High Risk';
+  return 'SOC Level 1 - Stable';
+}
+
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState<SocLevelOption>('ALL');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/alerts')
@@ -33,19 +60,44 @@ export default function AlertsPage() {
             return typeof obj.cve_id === 'string' &&
               typeof obj.log === 'string' &&
               typeof obj.alert === 'string' &&
+              (typeof obj.soc_level === 'undefined' || typeof obj.soc_level === 'string') &&
               (typeof obj.threat_score === 'undefined' || typeof obj.threat_score === 'number') &&
               (typeof obj.severity === 'undefined' || typeof obj.severity === 'number');
           });
-          setAlerts(validated);
+          const enriched: AlertItem[] = validated.map((a) => {
+            const threatScore = computeThreatScore(a);
+            const socLevel = (typeof a.soc_level === 'string' && a.soc_level.trim().length > 0)
+              ? a.soc_level
+              : computeSocLevel(threatScore);
+            return {
+              ...a,
+              threat_score: threatScore,
+              soc_level: socLevel,
+            };
+          });
+          setAlerts(enriched);
         }
       })
       .catch(err => console.error(err));
   }, []);
 
-  const filteredAlerts = alerts.filter((alert) =>
-    alert.cve_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    alert.log.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredAlerts = alerts.filter((alert) => {
+    const matchesSearch =
+      alert.cve_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      alert.log.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter =
+      filter === 'ALL' ||
+      (alert.soc_level ?? '').toLowerCase() === filter.toLowerCase();
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const sortedAlerts = [...filteredAlerts].sort((a, b) => {
+    const aSeverity = typeof a.severity === 'number' && Number.isFinite(a.severity) ? a.severity : 0;
+    const bSeverity = typeof b.severity === 'number' && Number.isFinite(b.severity) ? b.severity : 0;
+    return sortOrder === 'DESC' ? bSeverity - aSeverity : aSeverity - bSeverity;
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -60,14 +112,66 @@ export default function AlertsPage() {
           </p>
         </div>
         
-        <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Search CVE or logs..." 
-            className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all w-full md:w-80 shadow-sm"
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="w-full md:w-auto">
+          <div className="bg-white/80 backdrop-blur rounded-3xl border border-slate-200 shadow-sm px-4 py-4 md:px-5">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+              <div className="min-w-0">
+                <label className="block text-[11px] font-black tracking-widest uppercase text-slate-400 mb-2">
+                  Search
+                </label>
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                  <input
+                    type="text"
+                    placeholder="CVE, domain, IP, log..."
+                    className="pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all w-full md:w-[360px] shadow-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="w-full md:w-72">
+                <label className="block text-[11px] font-black tracking-widest uppercase text-slate-400 mb-2">
+                  SOC level
+                </label>
+                <div className="relative">
+                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                  <select
+                    className="appearance-none pl-12 pr-10 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm w-full hover:border-slate-300"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value as SocLevelOption)}
+                    aria-label="Filter alerts by SOC level"
+                  >
+                    {SOC_LEVEL_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 rotate-90 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="w-full md:w-56">
+                <label className="block text-[11px] font-black tracking-widest uppercase text-slate-400 mb-2">
+                  Severity sort
+                </label>
+                <div className="relative">
+                  <select
+                    className="appearance-none px-4 pr-10 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm w-full hover:border-slate-300"
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as 'ASC' | 'DESC')}
+                    aria-label="Sort alerts by severity"
+                  >
+                    <option value="DESC">Highest first</option>
+                    <option value="ASC">Lowest first</option>
+                  </select>
+                  <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 rotate-90 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -85,7 +189,11 @@ export default function AlertsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-50">
-              {filteredAlerts.map((alert, idx) => (
+              {sortedAlerts.map((alert, idx) => (
+                (() => {
+                  const threatScore = computeThreatScore(alert);
+                  const severity = typeof alert.severity === 'number' ? alert.severity : 0;
+                  return (
                 <tr key={idx} className="hover:bg-blue-50/30 transition-all group cursor-default">
                   <td className="px-8 py-6 whitespace-nowrap">
                     <div className="flex items-center gap-4">
@@ -115,16 +223,16 @@ export default function AlertsPage() {
                     </span>
                   </td>
                   <td className="px-8 py-6 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${alert.threat_score >= 9 ? 'bg-red-100 text-red-600' : alert.threat_score >= 7 ? 'bg-orange-100 text-orange-600' : 'bg-yellow-100 text-amber-700'}`}>
-                      {alert.threat_score ?? Math.round((alert.severity || 0) + (alert.cve_id === 'ML-ANOMALY' ? 1 : 0))}
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${threatScore >= 9 ? 'bg-red-100 text-red-600' : threatScore >= 7 ? 'bg-orange-100 text-orange-600' : 'bg-yellow-100 text-amber-700'}`}>
+                      {Math.round(threatScore)}
                     </span>
                   </td>
                   <td className="px-8 py-6 whitespace-nowrap">
                     <div className="flex items-center gap-4">
                       <div className="flex-1 w-20 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                         <div 
-                          className={`h-full rounded-full bg-gradient-to-r transition-all duration-1000 ease-out ${(alert.severity || 0) >= 8 ? 'from-red-400 to-rose-600' : 'from-orange-400 to-amber-600'}`}
-                          style={{ width: `${(alert.severity || 0) * 10}%` }}
+                          className={`h-full rounded-full bg-gradient-to-r transition-all duration-1000 ease-out ${severity >= 8 ? 'from-red-400 to-rose-600' : 'from-orange-400 to-amber-600'}`}
+                          style={{ width: `${severity * 10}%` }}
                         ></div>
                       </div>
                       <span className="text-sm font-black text-slate-900 w-8">{alert.severity}</span>
@@ -136,6 +244,8 @@ export default function AlertsPage() {
                     </button>
                   </td>
                 </tr>
+                  );
+                })()
               ))}
             </tbody>
           </table>
