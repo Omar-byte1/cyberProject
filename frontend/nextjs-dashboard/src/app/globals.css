@@ -24,3 +24,15 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Temporary export mode for html2canvas/jsPDF compatibility.
+   Forces plain RGB/HEX colors to avoid unsupported oklch parsing. */
+#report-content.pdf-mode,
+#report-content.pdf-mode * {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
