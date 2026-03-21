@@ -1,112 +1,182 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { 
-  BrainCircuit, 
-  ShieldCheck, 
-  Terminal, 
-  Lightbulb, 
-  BarChart, 
-  ChevronRight 
-} from 'lucide-react';
+import Link from 'next/link';
+import { BrainCircuit, ShieldAlert, Sparkles, ArrowRight } from 'lucide-react';
 
-type ThreatReportItem = {
-  soc_level: string;
-  log_source: string;
+interface ThreatReportItem {
+  cve_id: string;
   prediction: string;
   recommendation: string;
-};
+  soc_level: string;
+}
 
 export default function ThreatReportPage() {
   const [report, setReport] = useState<ThreatReportItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/threat-report')
-      .then(res => res.json())
-      .then((data) => {
+    const loadThreatReport = async (): Promise<void> => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch('http://127.0.0.1:8000/threat-report');
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+
+        const data: unknown = await response.json();
         if (Array.isArray(data)) {
-          const validated = data.filter((item): item is ThreatReportItem => {
+          const validatedItems = data.filter((item): item is ThreatReportItem => {
             if (typeof item !== 'object' || item === null) return false;
             const obj = item as Record<string, unknown>;
-            return typeof obj.soc_level === 'string' &&
-                   typeof obj.log_source === 'string' &&
+
+            return typeof obj.cve_id === 'string' &&
                    typeof obj.prediction === 'string' &&
-                   typeof obj.recommendation === 'string';
+                   typeof obj.recommendation === 'string' &&
+                   typeof obj.soc_level === 'string';
           });
-          setReport(validated);
+
+          setReport(validatedItems);
+        } else {
+          setReport([]);
         }
-      })
-      .catch(err => console.error(err));
+
+      } catch (fetchError) {
+        const message =
+          fetchError instanceof Error
+            ? fetchError.message
+            : 'Unable to load threat report.';
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadThreatReport();
   }, []);
 
-  const getSocLevelStyles = (level: string) => {
-    if (level.includes('Level 3')) return 'from-red-500 to-rose-600';
-    if (level.includes('Level 2')) return 'from-amber-500 to-orange-600';
-    return 'from-blue-500 to-indigo-600';
+  const getSocBadgeClasses = (level: string): string => {
+    const normalized = level.toLowerCase();
+    if (normalized.includes('level 3') || normalized.includes('critical')) {
+      return 'bg-red-100 text-red-700';
+    }
+    if (normalized.includes('level 2')) {
+      return 'bg-orange-100 text-orange-700';
+    }
+    return 'bg-green-100 text-green-700';
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
-      <div>
-        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-indigo-600">
-          AI Threat Intelligence Report
-        </h1>
-        <p className="text-slate-500 mt-2 font-medium flex items-center gap-2">
-          <BrainCircuit className="w-4 h-4 text-purple-500" />
-          Automated analysis and recommendations from the CTI AI Engine.
-        </p>
-      </div>
+    <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-violet-900 via-indigo-900 to-slate-900 p-6 text-white shadow-xl sm:p-8">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-fuchsia-400/20 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-10 left-0 h-44 w-44 rounded-full bg-blue-400/20 blur-2xl" />
+        <div className="relative space-y-3">
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
+            <BrainCircuit className="h-3.5 w-3.5" />
+            AI Threat Intelligence
+          </p>
+          <h1 className="text-2xl font-black tracking-tight sm:text-4xl">
+            Threat Report
+          </h1>
+          <p className="max-w-2xl text-sm text-slate-200 sm:text-base">
+            Automated predictions and recommendations generated from your SOC
+            data pipeline.
+          </p>
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {report.map((item, idx) => (
-          <div key={idx} className="group bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8 flex flex-col hover:-translate-y-2 transition-transform duration-300">
-            <div className="flex items-center gap-4 mb-6">
-              <div className={`p-3 rounded-2xl bg-gradient-to-br ${getSocLevelStyles(item.soc_level)} text-white shadow-lg shadow-current/20`}>
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">SOC Level</p>
-                <p className="font-black text-lg text-slate-800 tracking-tight">{item.soc_level.split(' - ')[0]}</p>
-              </div>
-            </div>
+      {loading && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {[1, 2, 3, 4].map((item) => (
+            <div
+              key={item}
+              className="h-44 animate-pulse rounded-2xl border border-slate-200 bg-slate-100"
+            />
+          ))}
+        </div>
+      )}
 
-            <div className="space-y-6 flex-1">
-              <div className="space-y-2">
-                <h3 className="font-bold text-sm text-slate-500 flex items-center gap-2">
-                  <Terminal className="w-4 h-4" /> Log Source
-                </h3>
-                <p className="font-mono text-xs bg-slate-50 p-3 rounded-lg text-slate-600 border border-slate-100">
-                  {item.log_source}
-                </p>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <p className="text-sm text-red-700">
+            Failed to load threat report: {error}
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {report.map((item, index) => (
+            <article
+              key={`${item.cve_id}-${index}`}
+              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    Indicator
+                  </p>
+                  <p className="font-mono text-sm font-black tracking-tight text-slate-900 sm:text-base">
+                  {item.cve_id || 'ML-ANOMALY'}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wide ${getSocBadgeClasses(item.soc_level)}`}
+                >
+                  {item.soc_level}
+                </span>
               </div>
 
-              <div className="space-y-2">
-                <h3 className="font-bold text-sm text-slate-500 flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4" /> AI Prediction
-                </h3>
-                <p className="text-sm font-medium text-slate-700">
-                  {item.prediction}
-                </p>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Prediction
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">{item.prediction}</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    Recommendation
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    {item.recommendation}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    SOC Level
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">{item.soc_level}</p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <h3 className="font-bold text-sm text-slate-500 flex items-center gap-2">
-                  <BarChart className="w-4 h-4" /> Recommendation
-                </h3>
-                <p className="text-sm font-semibold text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                  {item.recommendation}
-                </p>
+              <div className="mt-5 border-t border-slate-200 pt-4">
+                <Link
+                  href={`/alerts?cve=${encodeURIComponent(item.cve_id || 'ML-ANOMALY')}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 transition group-hover:translate-x-0.5 hover:text-indigo-900"
+                >
+                  View related alert
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
-            </div>
+            </article>
+          ))}
+        </div>
+      )}
 
-            <div className="mt-8 pt-6 border-t border-slate-100 text-right">
-              <button className="text-xs font-bold text-slate-400 group-hover:text-blue-600 flex items-center gap-1 ml-auto transition-colors">
-                Investigate <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      {!loading && !error && report.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
+          No threat report data available.
+        </div>
+      )}
+    </main>
   );
 }
