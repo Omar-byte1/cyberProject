@@ -1,19 +1,34 @@
+/* eslint-disable react/no-unescaped-entities */
+'use client';
+
 import Link from 'next/link';
 import { 
   LayoutDashboard, 
   AlertCircle, 
   ShieldAlert, 
   FileText, 
-  ShieldCheck 
+  ShieldCheck,
+  LogOut
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function Sidebar() {
+  const router = useRouter();
   const menuItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Alerts', href: '/alerts', icon: AlertCircle },
     { name: 'CVE Intel', href: '/cve', icon: ShieldAlert },
     { name: 'Threat Report', href: '/threat-report', icon: FileText },
   ];
+
+  const handleLogout = (): void => {
+    try {
+      localStorage.removeItem('auth');
+    } catch {
+      // Ignore storage errors in mock auth.
+    }
+    router.replace('/login');
+  };
 
   return (
     <div className="w-64 bg-slate-950 text-slate-300 h-screen p-6 flex flex-col fixed shadow-2xl border-r border-slate-800/50 backdrop-blur-xl">
@@ -40,7 +55,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-4">
         <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl p-5 border border-slate-800 shadow-inner">
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
@@ -54,6 +69,15 @@ export default function Sidebar() {
             <span className="text-blue-500/50">Infrastructure Secure</span>
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full inline-flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-slate-900/40 border border-slate-800 text-slate-200 hover:bg-slate-800/60 hover:text-white transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="font-bold text-sm tracking-wide">Logout</span>
+        </button>
       </div>
     </div>
   );

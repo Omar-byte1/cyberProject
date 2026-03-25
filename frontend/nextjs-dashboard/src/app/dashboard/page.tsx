@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { 
   ShieldAlert, 
   Activity, 
@@ -26,6 +26,14 @@ import {
 import { Doughnut, Line } from 'react-chartjs-2';
 import AlertChart from '@/components/AlertChart';
 
+interface Alert {
+  cve_id: string;
+  log?: string;
+  severity?: number;
+  threat_score?: number;
+  soc_level?: string;
+}
+
 ChartJS.register(
   ArcElement,
   Tooltip,
@@ -39,18 +47,21 @@ ChartJS.register(
 );
 
 export default function Dashboard() {
-  type AlertItem = {
-    cve_id: string;
-    log?: string;
-    severity?: number;
-    soc_level?: string;
-  };
+  const TOP_THREATS_COUNT = 5;
 
   type AlertStatItem = {
     cve_id?: string;
   };
 
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  type DashboardSummary = {
+    totalAlerts: number;
+    criticalAlerts: number;
+    mlAnomalies: number;
+    topThreats: Alert[];
+    generatedAt: string;
+  };
+
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState({
     total_alerts: 0,
     critical_cves: 0,
@@ -59,6 +70,7 @@ export default function Dashboard() {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const isAlertStatItem = useCallback((value: unknown): value is AlertStatItem => {
@@ -73,14 +85,21 @@ export default function Dashboard() {
       const data = await res.json();
       if (Array.isArray(data)) {
         const validatedItems = data.filter(isAlertStatItem);
-        const validatedAlerts: AlertItem[] = validatedItems
+        const validatedAlerts: Alert[] = validatedItems
           .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
           .map((item) => {
             const cveId = typeof item.cve_id === 'string' ? item.cve_id : 'N/A';
             const log = typeof item.log === 'string' ? item.log : undefined;
-            const severity = typeof item.severity === 'number' ? item.severity : undefined;
+            const severity =
+              typeof item.severity === 'number' && Number.isFinite(item.severity)
+                ? item.severity
+                : undefined;
+            const threatScore =
+              typeof item.threat_score === 'number' && Number.isFinite(item.threat_score)
+                ? item.threat_score
+                : undefined;
             const socLevel = typeof item.soc_level === 'string' ? item.soc_level : undefined;
-            return { cve_id: cveId, log, severity, soc_level: socLevel };
+            return { cve_id: cveId, log, severity, threat_score: threatScore, soc_level: socLevel };
           })
           .filter((a) => a.cve_id !== 'N/A');
 
@@ -106,6 +125,99 @@ export default function Dashboard() {
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
+
+  const getPriorityScore = (alert: Alert): number => {
+    if (typeof alert.threat_score === 'number' && Number.isFinite(alert.threat_score)) {
+      return alert.threat_score;
+    }
+    if (typeof alert.severity === 'number' && Number.isFinite(alert.severity)) {
+      return alert.severity;
+    }
+    return 0;
+  };
+
+  const getBadgeClasses = (score: number): string => {
+    if (score >= 9) return 'bg-red-100 text-red-700';
+    if (score >= 7) return 'bg-orange-100 text-orange-700';
+    return 'bg-emerald-100 text-emerald-700';
+  };
+
+  const topThreats = useMemo(() => {
+    const sorted = [...alerts].sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
+    return sorted.slice(0, TOP_THREATS_COUNT);
+  }, [alerts]);
+
+  const insight = useMemo(() => {
+    const totalAlerts = alerts.length;
+    const criticalAlerts = alerts.filter((alert) => {
+      const severity = typeof alert.severity === 'number' ? alert.severity : undefined;
+      const hasCriticalSeverity = typeof severity === 'number' && severity >= 8;
+
+      const socLevel = typeof alert.soc_level === 'string' ? alert.soc_level : '';
+      const hasCriticalSoc =
+        socLevel.toLowerCase().includes('critical');
+
+      return hasCriticalSeverity || hasCriticalSoc;
+    }).length;
+
+    const mlAnomalies = alerts.filter((alert) => alert.cve_id === 'ML-ANOMALY').length;
+
+    if (criticalAlerts > 5) {
+      return {
+        tone: 'critical' as const,
+        message: 'High number of critical threats detected. Immediate attention required.',
+        totalAlerts,
+        criticalAlerts,
+        mlAnomalies,
+      };
+    }
+
+    if (mlAnomalies > 0) {
+      return {
+        tone: 'anomaly' as const,
+        message: 'Unusual behavior detected. Potential anomaly in system activity.',
+        totalAlerts,
+        criticalAlerts,
+        mlAnomalies,
+      };
+    }
+
+    return {
+      tone: 'stable' as const,
+      message: 'System appears stable. No major threats detected.',
+      totalAlerts,
+      criticalAlerts,
+      mlAnomalies,
+    };
+  }, [alerts]);
+
+  const exportSummary = useCallback(() => {
+    setIsExporting(true);
+    try {
+      const summary: DashboardSummary = {
+        totalAlerts: insight.totalAlerts,
+        criticalAlerts: insight.criticalAlerts,
+        mlAnomalies: insight.mlAnomalies,
+        topThreats,
+        generatedAt: new Date().toISOString(),
+      };
+
+      const json = JSON.stringify(summary, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'dashboard-summary.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [insight, topThreats]);
 
   const doughnutData = {
     labels: ['CVE Critical', 'ML Anomalies', 'Others'],
@@ -170,6 +282,26 @@ export default function Dashboard() {
             )}
             {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
           </button>
+
+          <button
+            type="button"
+            onClick={exportSummary}
+            disabled={isLoading || isExporting || isRefreshing}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold border transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
+              insight.tone === 'critical'
+                ? 'bg-rose-50 border-rose-200 text-rose-900 hover:bg-rose-100'
+                : insight.tone === 'anomaly'
+                  ? 'bg-orange-50 border-orange-200 text-orange-900 hover:bg-orange-100'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
+            }`}
+          >
+            {isExporting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldAlert className="w-4 h-4" />
+            )}
+            {isExporting ? 'Exporting...' : 'Export Summary'}
+          </button>
         </div>
       </div>
       
@@ -215,6 +347,109 @@ export default function Dashboard() {
             trendUp={true}
             isStatus
           />
+        </div>
+      )}
+
+      {/* Top Threats */}
+      {isLoading ? (
+        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 animate-pulse">
+          <div className="h-6 w-44 bg-slate-200 rounded mb-5" />
+          <div className="space-y-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 rounded-2xl bg-slate-100/70" />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
+          <h3 className="text-xl font-bold text-slate-800 mb-5 flex items-center gap-2">
+            <span aria-hidden="true">🔥</span>
+            Top Threats
+          </h3>
+
+          {topThreats.length === 0 ? (
+            <p className="text-sm font-medium text-slate-500">No threats found.</p>
+          ) : (
+            <div className="space-y-3">
+              {topThreats.map((alert, idx) => {
+                const hasThreatScore =
+                  typeof alert.threat_score === 'number' && Number.isFinite(alert.threat_score);
+                const scoreValue = getPriorityScore(alert);
+                const scoreLabel = hasThreatScore ? 'TS' : 'SEV';
+                const badgeClasses = getBadgeClasses(scoreValue);
+
+                return (
+                  <div
+                    key={`${alert.cve_id}-${scoreValue}-${idx}`}
+                    className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3 border border-slate-100 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-black text-slate-900 truncate">{alert.cve_id}</p>
+                      <p className="text-xs font-semibold text-slate-500 truncate mt-1">
+                        {alert.soc_level ?? 'Unknown'}
+                      </p>
+                    </div>
+
+                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shadow-sm ${badgeClasses}`}>
+                      <span className="opacity-90">{scoreLabel}</span>
+                      {Math.round(scoreValue)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AI Insight */}
+      {isLoading ? (
+        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 animate-pulse">
+          <div className="h-6 w-40 bg-slate-200 rounded mb-5" />
+          <div className="h-5 w-4/5 bg-slate-200 rounded" />
+          <div className="mt-3 h-5 w-3/5 bg-slate-200 rounded" />
+        </div>
+      ) : (
+        <div
+          className={`p-8 rounded-3xl shadow-xl shadow-slate-200/50 border ${
+            insight.tone === 'critical'
+              ? 'bg-rose-50/70 border-rose-100'
+              : insight.tone === 'anomaly'
+                ? 'bg-orange-50/70 border-orange-100'
+                : 'bg-emerald-50/70 border-emerald-100'
+          }`}
+        >
+          <h3 className="text-xl font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <span aria-hidden="true">🧠</span>
+            AI Insight
+          </h3>
+
+          <div
+            className={`rounded-2xl px-4 py-3 border ${
+              insight.tone === 'critical'
+                ? 'bg-rose-100/60 border-rose-200 text-rose-900'
+                : insight.tone === 'anomaly'
+                  ? 'bg-orange-100/60 border-orange-200 text-orange-900'
+                  : 'bg-emerald-100/60 border-emerald-200 text-emerald-900'
+            }`}
+          >
+            <p className="text-sm font-semibold leading-relaxed">
+              {insight.message}
+            </p>
+
+            <p
+              className={`mt-2 text-xs font-bold ${
+                insight.tone === 'critical'
+                  ? 'text-rose-800'
+                  : insight.tone === 'anomaly'
+                    ? 'text-orange-800'
+                    : 'text-emerald-800'
+              }`}
+            >
+              {insight.criticalAlerts > 0 ? `Critical: ${insight.criticalAlerts} • ` : ''}
+              Anomalies (ML): {insight.mlAnomalies} • Total: {insight.totalAlerts}
+            </p>
+          </div>
         </div>
       )}
 

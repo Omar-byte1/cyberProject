@@ -22,6 +22,7 @@ export default function LoginPage() {
 
     // Auth local simple (mécanisme simulé)
     if (username === 'soc' && password === 'soc123') {
+      localStorage.setItem('auth', 'true');
       router.replace('/dashboard');
       return;
     }
