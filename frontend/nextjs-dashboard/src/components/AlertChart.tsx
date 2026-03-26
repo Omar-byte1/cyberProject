@@ -47,7 +47,10 @@ export default function AlertChart() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch('http://127.0.0.1:8000/alerts');
+        const token = window.localStorage.getItem('token');
+        const res = await fetch('http://127.0.0.1:8000/alerts', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) {
           throw new Error(`API error: ${res.status}`);
         }

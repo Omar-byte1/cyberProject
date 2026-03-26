@@ -23,6 +23,7 @@ export default function Sidebar() {
 
   const handleLogout = (): void => {
     try {
+      localStorage.removeItem('token');
       localStorage.removeItem('auth');
     } catch {
       // Ignore storage errors in mock auth.

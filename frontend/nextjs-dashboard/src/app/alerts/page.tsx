@@ -104,7 +104,11 @@ export default function AlertsPage() {
   const fetchAlerts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/alerts', { cache: 'no-store' });
+      const token = window.localStorage.getItem('token');
+      const res = await fetch('http://127.0.0.1:8000/alerts', {
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }

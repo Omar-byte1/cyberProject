@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -20,14 +19,45 @@ export default function LoginPage() {
       return;
     }
 
-    // Auth local simple (mécanisme simulé)
-    if (username === 'soc' && password === 'soc123') {
-      localStorage.setItem('auth', 'true');
-      router.replace('/dashboard');
-      return;
-    }
+    const login = async (): Promise<void> => {
+      type TokenResponse = {
+        access_token: string;
+        token_type?: string;
+      };
 
-    setError("Identifiants incorrects. ");
+      const isTokenResponse = (value: unknown): value is TokenResponse => {
+        if (typeof value !== 'object' || value === null) return false;
+        const obj = value as Record<string, unknown>;
+        return typeof obj.access_token === 'string' && obj.access_token.trim().length > 0;
+      };
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), password }),
+        });
+
+        if (!res.ok) {
+          setError('Identifiants incorrects.');
+          return;
+        }
+
+        const data: unknown = await res.json();
+        if (!isTokenResponse(data)) {
+          setError('Unexpected server response.');
+          return;
+        }
+
+        localStorage.setItem('token', data.access_token);
+        localStorage.removeItem('auth');
+        router.replace('/dashboard');
+      } catch {
+        setError('Unable to connect to authentication service.');
+      }
+    };
+
+    void login();
   };
 
   return (

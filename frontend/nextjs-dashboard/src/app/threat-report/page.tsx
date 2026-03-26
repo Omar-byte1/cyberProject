@@ -25,7 +25,10 @@ export default function ThreatReportPage() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch('http://127.0.0.1:8000/threat-report');
+        const token = window.localStorage.getItem('token');
+        const response = await fetch('http://127.0.0.1:8000/threat-report', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!response.ok) {
           throw new Error(`Request failed: ${response.status}`);
         }

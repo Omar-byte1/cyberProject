@@ -81,7 +81,10 @@ export default function Dashboard() {
     setIsRefreshing(true);
     setIsLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/alerts');
+      const token = window.localStorage.getItem('token');
+      const res = await fetch('http://127.0.0.1:8000/alerts', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         const validatedItems = data.filter(isAlertStatItem);
@@ -141,6 +144,22 @@ export default function Dashboard() {
     if (score >= 7) return 'bg-orange-100 text-orange-700';
     return 'bg-emerald-100 text-emerald-700';
   };
+
+  const parseLogTimestamp = (log: string): Date | null => {
+    // Expected prefix: "YYYY-MM-DD HH:mm:ss"
+    if (typeof log !== 'string' || log.length < 19) return null;
+    const prefix = log.slice(0, 19);
+    const isoLike = prefix.replace(' ', 'T');
+    const date = new Date(isoLike);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const extractHourFromLog = (log: string): number | null => {
+    const ts = parseLogTimestamp(log);
+    return ts ? ts.getHours() : null;
+  };
+
+  const formatHourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
 
   const topThreats = useMemo(() => {
     const sorted = [...alerts].sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
@@ -256,6 +275,30 @@ export default function Dashboard() {
       },
     ],
   };
+
+  const trendChartData = useMemo(() => {
+    const hourCounts: Record<number, number> = {};
+
+    for (const alert of alerts) {
+      const log = alert.log;
+      if (typeof log !== 'string') continue;
+
+      const hour = extractHourFromLog(log);
+      if (hour === null) continue;
+
+      hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
+    }
+
+    const hours = Object.keys(hourCounts)
+      .map((k) => Number(k))
+      .filter((h) => Number.isFinite(h))
+      .sort((a, b) => a - b);
+
+    return {
+      labels: hours.map(formatHourLabel),
+      counts: hours.map((h) => hourCounts[h]),
+    };
+  }, [alerts]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
@@ -499,6 +542,54 @@ export default function Dashboard() {
               } 
             }} />
           </div>
+        </div>
+
+        {/* Alerts Trend Chart */}
+        <div className="lg:col-span-3 bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
+          <div className="flex items-center justify-between mb-6 gap-4">
+            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-500" />
+              📊 Alerts Trend
+            </h3>
+          </div>
+
+          {isLoading ? (
+            <div className="h-[280px] rounded-2xl bg-slate-100 animate-pulse border border-slate-200" />
+          ) : trendChartData.labels.length === 0 ? (
+            <div className="h-[280px] flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50">
+              <p className="text-sm font-semibold text-slate-600">
+                No timestamps found in alerts logs.
+              </p>
+            </div>
+          ) : (
+            <div className="h-[280px]">
+              <Line
+                data={{
+                  labels: trendChartData.labels,
+                  datasets: [
+                    {
+                      label: 'Alerts per hour',
+                      data: trendChartData.counts,
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      tension: 0.4,
+                      pointBackgroundColor: '#3b82f6',
+                      pointBorderColor: '#fff',
+                      pointHoverRadius: 6,
+                    },
+                  ],
+                }}
+                options={{
+                  maintainAspectRatio: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                  },
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

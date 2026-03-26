@@ -9,8 +9,8 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
-    const authValue = window.localStorage.getItem('auth');
-    const authed = authValue === 'true';
+    const tokenValue = window.localStorage.getItem('token');
+    const authed = typeof tokenValue === 'string' && tokenValue.trim().length > 0;
 
     if (!authed) {
       router.replace('/login');
