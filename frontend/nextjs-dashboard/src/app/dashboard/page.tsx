@@ -26,6 +26,7 @@ import {
 import { Doughnut, Line } from 'react-chartjs-2';
 import AlertChart from '@/components/AlertChart';
 
+// --- Interfaces & Types ---
 interface Alert {
   cve_id: string;
   log?: string;
@@ -33,6 +34,22 @@ interface Alert {
   threat_score?: number;
   soc_level?: string;
 }
+
+type AlertStatItem = {
+  cve_id?: string;
+  log?: string;
+  severity?: number;
+  threat_score?: number;
+  soc_level?: string;
+};
+
+type DashboardSummary = {
+  totalAlerts: number;
+  criticalAlerts: number;
+  mlAnomalies: number;
+  topThreats: Alert[];
+  generatedAt: string;
+};
 
 ChartJS.register(
   ArcElement,
@@ -49,18 +66,7 @@ ChartJS.register(
 export default function Dashboard() {
   const TOP_THREATS_COUNT = 5;
 
-  type AlertStatItem = {
-    cve_id?: string;
-  };
-
-  type DashboardSummary = {
-    totalAlerts: number;
-    criticalAlerts: number;
-    mlAnomalies: number;
-    topThreats: Alert[];
-    generatedAt: string;
-  };
-
+  // --- States ---
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState({
     total_alerts: 0,
@@ -73,70 +79,13 @@ export default function Dashboard() {
   const [isExporting, setIsExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  // --- Helpers ---
   const isAlertStatItem = useCallback((value: unknown): value is AlertStatItem => {
     return typeof value === 'object' && value !== null;
   }, []);
 
-  const fetchAlerts = useCallback(async () => {
-    setIsRefreshing(true);
-    setIsLoading(true);
-    try {
-      const token = window.localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:8000/alerts', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const validatedItems = data.filter(isAlertStatItem);
-        const validatedAlerts: Alert[] = validatedItems
-          .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
-          .map((item) => {
-            const cveId = typeof item.cve_id === 'string' ? item.cve_id : 'N/A';
-            const log = typeof item.log === 'string' ? item.log : undefined;
-            const severity =
-              typeof item.severity === 'number' && Number.isFinite(item.severity)
-                ? item.severity
-                : undefined;
-            const threatScore =
-              typeof item.threat_score === 'number' && Number.isFinite(item.threat_score)
-                ? item.threat_score
-                : undefined;
-            const socLevel = typeof item.soc_level === 'string' ? item.soc_level : undefined;
-            return { cve_id: cveId, log, severity, threat_score: threatScore, soc_level: socLevel };
-          })
-          .filter((a) => a.cve_id !== 'N/A');
-
-        setAlerts(validatedAlerts);
-        const mlAnomalies = validatedItems.filter((a) => a.cve_id === 'ML-ANOMALY').length;
-        setStats({
-          total_alerts: validatedItems.length,
-          critical_cves: validatedItems.filter((a) => typeof a.cve_id === 'string' && a.cve_id.startsWith('CVE')).length,
-          ml_anomalies: mlAnomalies,
-          soc_level: mlAnomalies > 0 ? 'SOC Level 2 - High Risk' : 'SOC Level 1 - Stable'
-        });
-        setLastUpdated(new Date());
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsRefreshing(false);
-      setIsLoading(false);
-    }
-  }, [isAlertStatItem]);
-
-
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
-
   const getPriorityScore = (alert: Alert): number => {
-    if (typeof alert.threat_score === 'number' && Number.isFinite(alert.threat_score)) {
-      return alert.threat_score;
-    }
-    if (typeof alert.severity === 'number' && Number.isFinite(alert.severity)) {
-      return alert.severity;
-    }
-    return 0;
+    return alert.threat_score ?? alert.severity ?? 0;
   };
 
   const getBadgeClasses = (score: number): string => {
@@ -145,68 +94,112 @@ export default function Dashboard() {
     return 'bg-emerald-100 text-emerald-700';
   };
 
-  const parseLogTimestamp = (log: string): Date | null => {
-    // Expected prefix: "YYYY-MM-DD HH:mm:ss"
-    if (typeof log !== 'string' || log.length < 19) return null;
-    const prefix = log.slice(0, 19);
-    const isoLike = prefix.replace(' ', 'T');
-    const date = new Date(isoLike);
-    return Number.isNaN(date.getTime()) ? null : date;
+  const extractIPFromLog = (log: string): string | null => {
+    const match = log.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+    return match ? match[0] : null;
+  };
+  
+  const mapIPToCountry = (ip: string): { country: string; flag: string } => {
+    if (ip.startsWith('192.')) return { country: 'Morocco', flag: '🇲🇦' };
+    if (ip.startsWith('10.')) return { country: 'France', flag: '🇫🇷' };
+    if (ip.startsWith('172.')) return { country: 'USA', flag: '🇺🇸' };
+    return { country: 'Unknown', flag: '🌐' };
   };
 
   const extractHourFromLog = (log: string): number | null => {
-    const ts = parseLogTimestamp(log);
-    return ts ? ts.getHours() : null;
+    if (typeof log !== 'string' || log.length < 19) return null;
+    const prefix = log.slice(0, 19).replace(' ', 'T');
+    const date = new Date(prefix);
+    return Number.isNaN(date.getTime()) ? null : date.getHours();
   };
 
-  const formatHourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
+  // --- Data Fetching ---
+  const fetchAlerts = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const token = window.localStorage.getItem('token');
+      const res = await fetch('http://127.0.0.1:8000/alerts', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
 
+      if (Array.isArray(data)) {
+        const validatedAlerts: Alert[] = data
+          .filter(isAlertStatItem)
+          .map((item) => ({
+            cve_id: typeof item.cve_id === 'string' ? item.cve_id : 'N/A',
+            log: item.log,
+            severity: item.severity,
+            threat_score: item.threat_score,
+            soc_level: item.soc_level
+          }))
+          .filter((a) => a.cve_id !== 'N/A');
+
+        setAlerts(validatedAlerts);
+        const mlAnomalies = validatedAlerts.filter((a) => a.cve_id === 'ML-ANOMALY').length;
+        
+        setStats({
+          total_alerts: validatedAlerts.length,
+          critical_cves: validatedAlerts.filter((a) => a.cve_id.startsWith('CVE')).length,
+          ml_anomalies: mlAnomalies,
+          soc_level: mlAnomalies > 0 ? 'SOC Level 2 - High Risk' : 'SOC Level 1 - Stable'
+        });
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setIsRefreshing(false);
+      setIsLoading(false);
+    }
+  }, [isAlertStatItem]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  // --- Memos for Charts & UI ---
   const topThreats = useMemo(() => {
-    const sorted = [...alerts].sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
-    return sorted.slice(0, TOP_THREATS_COUNT);
+    return [...alerts]
+      .sort((a, b) => getPriorityScore(b) - getPriorityScore(a))
+      .slice(0, TOP_THREATS_COUNT);
   }, [alerts]);
 
   const insight = useMemo(() => {
-    const totalAlerts = alerts.length;
-    const criticalAlerts = alerts.filter((alert) => {
-      const severity = typeof alert.severity === 'number' ? alert.severity : undefined;
-      const hasCriticalSeverity = typeof severity === 'number' && severity >= 8;
+    const criticals = alerts.filter(a => (a.severity ?? 0) >= 8 || a.soc_level?.toLowerCase().includes('critical')).length;
+    const anomalies = alerts.filter(a => a.cve_id === 'ML-ANOMALY').length;
 
-      const socLevel = typeof alert.soc_level === 'string' ? alert.soc_level : '';
-      const hasCriticalSoc =
-        socLevel.toLowerCase().includes('critical');
+    if (criticals > 5) return { tone: 'critical', message: 'High number of critical threats detected.', criticals, anomalies };
+    if (anomalies > 0) return { tone: 'anomaly', message: 'Unusual behavior detected in system activity.', criticals, anomalies };
+    return { tone: 'stable', message: 'System appears stable. No major threats.', criticals, anomalies };
+  }, [alerts]);
 
-      return hasCriticalSeverity || hasCriticalSoc;
-    }).length;
+  const ipStats = useMemo(() => {
+    const counts: Record<string, { count: number; flag: string }> = {};
+    alerts.forEach(alert => {
+      if (!alert.log) return;
+      const ip = extractIPFromLog(alert.log);
+      if (!ip) return;
+      const { country, flag } = mapIPToCountry(ip);
+      if (!counts[country]) counts[country] = { count: 0, flag };
+      counts[country].count += 1;
+    });
+    return Object.entries(counts)
+      .map(([country, data]) => ({ country, ...data }))
+      .sort((a, b) => b.count - a.count);
+  }, [alerts]);
 
-    const mlAnomalies = alerts.filter((alert) => alert.cve_id === 'ML-ANOMALY').length;
-
-    if (criticalAlerts > 5) {
-      return {
-        tone: 'critical' as const,
-        message: 'High number of critical threats detected. Immediate attention required.',
-        totalAlerts,
-        criticalAlerts,
-        mlAnomalies,
-      };
-    }
-
-    if (mlAnomalies > 0) {
-      return {
-        tone: 'anomaly' as const,
-        message: 'Unusual behavior detected. Potential anomaly in system activity.',
-        totalAlerts,
-        criticalAlerts,
-        mlAnomalies,
-      };
-    }
-
+  const trendChartData = useMemo(() => {
+    const hourCounts: Record<number, number> = {};
+    alerts.forEach(alert => {
+      if (!alert.log) return;
+      const hour = extractHourFromLog(alert.log);
+      if (hour !== null) hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
+    });
+    const hours = Object.keys(hourCounts).map(Number).sort((a, b) => a - b);
     return {
-      tone: 'stable' as const,
-      message: 'System appears stable. No major threats detected.',
-      totalAlerts,
-      criticalAlerts,
-      mlAnomalies,
+      labels: hours.map(h => `${String(h).padStart(2, '0')}:00`),
+      counts: hours.map(h => hourCounts[h]),
     };
   }, [alerts]);
 
@@ -214,94 +207,27 @@ export default function Dashboard() {
     setIsExporting(true);
     try {
       const summary: DashboardSummary = {
-        totalAlerts: insight.totalAlerts,
-        criticalAlerts: insight.criticalAlerts,
-        mlAnomalies: insight.mlAnomalies,
+        totalAlerts: alerts.length,
+        criticalAlerts: insight.criticals,
+        mlAnomalies: insight.anomalies,
         topThreats,
         generatedAt: new Date().toISOString(),
       };
-
-      const json = JSON.stringify(summary, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
+      const blob = new Blob([JSON.stringify(summary, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'dashboard-summary.json';
-      document.body.appendChild(link);
+      link.download = `security-report-${new Date().getTime()}.json`;
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
     } finally {
       setIsExporting(false);
     }
-  }, [insight, topThreats]);
+  }, [alerts, insight, topThreats]);
 
-  const doughnutData = {
-    labels: ['CVE Critical', 'ML Anomalies', 'Others'],
-    datasets: [
-      {
-        data: [stats.critical_cves, stats.ml_anomalies, stats.total_alerts - (stats.critical_cves + stats.ml_anomalies)],
-        backgroundColor: [
-          'rgba(255, 30, 86, 0.85)', // Rose/Red vibrant
-          'rgba(255, 150, 0, 0.85)', // Orange vibrant
-          'rgba(0, 150, 255, 0.85)', // Blue vibrant
-        ],
-        borderColor: [
-          '#ff1e56',
-          '#ff9600',
-          '#0096ff',
-        ],
-        borderWidth: 2,
-        hoverOffset: 15,
-      },
-    ],
-  };
-
-  const lineData = {
-    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
-    datasets: [
-      {
-        fill: true,
-        label: 'Threat Frequency',
-        data: [12, 19, 3, 5, 2, 3, 10],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-        tension: 0.4,
-        pointBackgroundColor: '#3b82f6',
-        pointBorderColor: '#fff',
-        pointHoverRadius: 6,
-      },
-    ],
-  };
-
-  const trendChartData = useMemo(() => {
-    const hourCounts: Record<number, number> = {};
-
-    for (const alert of alerts) {
-      const log = alert.log;
-      if (typeof log !== 'string') continue;
-
-      const hour = extractHourFromLog(log);
-      if (hour === null) continue;
-
-      hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
-    }
-
-    const hours = Object.keys(hourCounts)
-      .map((k) => Number(k))
-      .filter((h) => Number.isFinite(h))
-      .sort((a, b) => a - b);
-
-    return {
-      labels: hours.map(formatHourLabel),
-      counts: hours.map((h) => hourCounts[h]),
-    };
-  }, [alerts]);
-
+  // --- Render ---
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700 p-6 bg-slate-50 min-h-screen">
+      {/* Header */}
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
@@ -309,320 +235,147 @@ export default function Dashboard() {
           </h1>
           <p className="text-slate-500 mt-2 flex items-center gap-2 font-medium">
             <Clock className="w-4 h-4 text-blue-500" />
-            {isLoading ? 'Loading data...' : `Last sync: ${lastUpdated.toLocaleTimeString()}`}
+            {isLoading ? 'Loading...' : `Last sync: ${lastUpdated.toLocaleTimeString()}`}
           </p>
         </div>
         <div className="flex gap-4">
           <button 
             onClick={fetchAlerts}
             disabled={isRefreshing}
-            className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:scale-105 active:scale-95 transition-all shadow-md shadow-blue-500/20 disabled:opacity-70`}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
           >
-            {isRefreshing ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
-            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+            {isRefreshing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Refresh
           </button>
-
           <button
-            type="button"
             onClick={exportSummary}
-            disabled={isLoading || isExporting || isRefreshing}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold border transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
-              insight.tone === 'critical'
-                ? 'bg-rose-50 border-rose-200 text-rose-900 hover:bg-rose-100'
-                : insight.tone === 'anomaly'
-                  ? 'bg-orange-50 border-orange-200 text-orange-900 hover:bg-orange-100'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
-            }`}
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
           >
-            {isExporting ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <ShieldAlert className="w-4 h-4" />
-            )}
-            {isExporting ? 'Exporting...' : 'Export Summary'}
+            <ShieldAlert className="w-4 h-4" />
+            Export
           </button>
         </div>
       </div>
       
-      {/* Stat Cards */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
-          {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-28 rounded-2xl bg-slate-800/70 border border-slate-700" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard 
-            title="Total Alerts" 
-            value={stats.total_alerts} 
-            icon={Activity} 
-            gradient="from-blue-500 to-indigo-600"
-            trend="+12%"
-            trendUp={true}
-          />
-          <StatCard 
-            title="Critical CVEs" 
-            value={stats.critical_cves} 
-            icon={ShieldAlert} 
-            gradient="from-rose-500 to-red-600"
-            trend="+5%"
-            trendUp={true}
-          />
-          <StatCard 
-            title="ML Anomalies" 
-            value={stats.ml_anomalies} 
-            icon={Zap} 
-            gradient="from-amber-400 to-orange-500"
-            trend="-2%"
-            trendUp={false}
-          />
-          <StatCard 
-            title="SOC Status" 
-            value={stats.soc_level} 
-            icon={Target} 
-            gradient={stats.soc_level.includes('Stable') ? 'from-emerald-400 to-green-600' : 'from-rose-500 to-red-600'}
-            trend="Live"
-            trendUp={true}
-            isStatus
-          />
-        </div>
-      )}
-
-      {/* Top Threats */}
-      {isLoading ? (
-        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 animate-pulse">
-          <div className="h-6 w-44 bg-slate-200 rounded mb-5" />
-          <div className="space-y-3">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-14 rounded-2xl bg-slate-100/70" />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
-          <h3 className="text-xl font-bold text-slate-800 mb-5 flex items-center gap-2">
-            <span aria-hidden="true">🔥</span>
-            Top Threats
-          </h3>
-
-          {topThreats.length === 0 ? (
-            <p className="text-sm font-medium text-slate-500">No threats found.</p>
-          ) : (
-            <div className="space-y-3">
-              {topThreats.map((alert, idx) => {
-                const hasThreatScore =
-                  typeof alert.threat_score === 'number' && Number.isFinite(alert.threat_score);
-                const scoreValue = getPriorityScore(alert);
-                const scoreLabel = hasThreatScore ? 'TS' : 'SEV';
-                const badgeClasses = getBadgeClasses(scoreValue);
-
-                return (
-                  <div
-                    key={`${alert.cve_id}-${scoreValue}-${idx}`}
-                    className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3 border border-slate-100 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-black text-slate-900 truncate">{alert.cve_id}</p>
-                      <p className="text-xs font-semibold text-slate-500 truncate mt-1">
-                        {alert.soc_level ?? 'Unknown'}
-                      </p>
-                    </div>
-
-                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shadow-sm ${badgeClasses}`}>
-                      <span className="opacity-90">{scoreLabel}</span>
-                      {Math.round(scoreValue)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* AI Insight */}
-      {isLoading ? (
-        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 animate-pulse">
-          <div className="h-6 w-40 bg-slate-200 rounded mb-5" />
-          <div className="h-5 w-4/5 bg-slate-200 rounded" />
-          <div className="mt-3 h-5 w-3/5 bg-slate-200 rounded" />
-        </div>
-      ) : (
-        <div
-          className={`p-8 rounded-3xl shadow-xl shadow-slate-200/50 border ${
-            insight.tone === 'critical'
-              ? 'bg-rose-50/70 border-rose-100'
-              : insight.tone === 'anomaly'
-                ? 'bg-orange-50/70 border-orange-100'
-                : 'bg-emerald-50/70 border-emerald-100'
-          }`}
-        >
-          <h3 className="text-xl font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <span aria-hidden="true">🧠</span>
-            AI Insight
-          </h3>
-
-          <div
-            className={`rounded-2xl px-4 py-3 border ${
-              insight.tone === 'critical'
-                ? 'bg-rose-100/60 border-rose-200 text-rose-900'
-                : insight.tone === 'anomaly'
-                  ? 'bg-orange-100/60 border-orange-200 text-orange-900'
-                  : 'bg-emerald-100/60 border-emerald-200 text-emerald-900'
-            }`}
-          >
-            <p className="text-sm font-semibold leading-relaxed">
-              {insight.message}
-            </p>
-
-            <p
-              className={`mt-2 text-xs font-bold ${
-                insight.tone === 'critical'
-                  ? 'text-rose-800'
-                  : insight.tone === 'anomaly'
-                    ? 'text-orange-800'
-                    : 'text-emerald-800'
-              }`}
-            >
-              {insight.criticalAlerts > 0 ? `Critical: ${insight.criticalAlerts} • ` : ''}
-              Anomalies (ML): {insight.mlAnomalies} • Total: {insight.totalAlerts}
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {isLoading ? (
-          <div className="h-64 rounded-2xl bg-slate-800/70 border border-slate-700 animate-pulse" />
-        ) : (
-          <AlertChart />
-        )}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard title="Total Alerts" value={stats.total_alerts} icon={Activity} gradient="from-blue-500 to-indigo-600" trend="+12%" trendUp />
+        <StatCard title="Critical CVEs" value={stats.critical_cves} icon={ShieldAlert} gradient="from-rose-500 to-red-600" trend="+5%" trendUp />
+        <StatCard title="ML Anomalies" value={stats.ml_anomalies} icon={Zap} gradient="from-amber-400 to-orange-500" trend="-2%" trendUp={false} />
+        <StatCard title="SOC Status" value={stats.soc_level} icon={Target} gradient={stats.soc_level.includes('Stable') ? 'from-emerald-400 to-green-600' : 'from-rose-500 to-red-600'} trend="Live" trendUp isStatus />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-1">
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" />
-              Threat Activity Timeline
-            </h3>
-          </div>
-          <div className="h-[350px]">
-            <Line data={lineData} options={{ 
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' } },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
-              }
-            }} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Top Threats */}
+        <div className="lg:col-span-1 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+          <h3 className="text-xl font-bold text-slate-800 mb-5">🔥 Top Threats</h3>
+          <div className="space-y-3">
+            {topThreats.map((alert, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-50 bg-slate-50/50">
+                <div className="truncate pr-2">
+                  <p className="font-bold text-slate-900 truncate">{alert.cve_id}</p>
+                  <p className="text-xs text-slate-500">{alert.soc_level || 'General'}</p>
+                </div>
+                <span className={`px-3 py-1 rounded-lg text-xs font-bold ${getBadgeClasses(getPriorityScore(alert))}`}>
+                  {getPriorityScore(alert)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Distribution Chart */}
-        <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
-          <h3 className="text-xl font-bold text-slate-800 mb-8 flex items-center gap-2">
-            <Target className="w-5 h-5 text-purple-500" />
-            Threat Distribution
-          </h3>
-          <div className="h-[300px] flex items-center justify-center">
-            <Doughnut data={doughnutData} options={{ 
-              maintainAspectRatio: false, 
-              plugins: { 
-                legend: { 
-                  position: 'bottom',
-                  labels: { usePointStyle: true, padding: 25, font: { weight: 'bold', size: 12 } } 
-                } 
-              } 
-            }} />
+        <div className="lg:col-span-1 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+          <h3 className="text-xl font-bold text-slate-800 mb-8">🎯 Threat Distribution</h3>
+          <div className="h-[250px]">
+            <Doughnut 
+              data={{
+                labels: ['Critical', 'Anomalies', 'Other'],
+                datasets: [{
+                  data: [stats.critical_cves, stats.ml_anomalies, stats.total_alerts - (stats.critical_cves + stats.ml_anomalies)],
+                  backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6']
+                }]
+              }}
+              options={{ maintainAspectRatio: false }}
+            />
           </div>
         </div>
 
-        {/* Alerts Trend Chart */}
-        <div className="lg:col-span-3 bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
-          <div className="flex items-center justify-between mb-6 gap-4">
-            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-500" />
-              📊 Alerts Trend
-            </h3>
+        {/* AI Insights */}
+        <div className={`lg:col-span-1 p-8 rounded-3xl shadow-xl border ${insight.tone === 'critical' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+          <h3 className="text-xl font-bold text-slate-800 mb-4">🧠 AI Insight</h3>
+          <p className="font-semibold text-slate-700 mb-4">{insight.message}</p>
+          <div className="text-xs font-bold space-y-1">
+            <p>Critical: {insight.criticals}</p>
+            <p>Anomalies: {insight.anomalies}</p>
           </div>
+        </div>
 
-          {isLoading ? (
-            <div className="h-[280px] rounded-2xl bg-slate-100 animate-pulse border border-slate-200" />
-          ) : trendChartData.labels.length === 0 ? (
-            <div className="h-[280px] flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50">
-              <p className="text-sm font-semibold text-slate-600">
-                No timestamps found in alerts logs.
-              </p>
-            </div>
-          ) : (
-            <div className="h-[280px]">
-              <Line
-                data={{
-                  labels: trendChartData.labels,
-                  datasets: [
-                    {
-                      label: 'Alerts per hour',
-                      data: trendChartData.counts,
-                      borderColor: '#3b82f6',
-                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                      tension: 0.4,
-                      pointBackgroundColor: '#3b82f6',
-                      pointBorderColor: '#fff',
-                      pointHoverRadius: 6,
-                    },
-                  ],
-                }}
-                options={{
-                  maintainAspectRatio: false,
-                  plugins: { legend: { display: false } },
-                  scales: {
-                    y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
-                  },
-                }}
-              />
-            </div>
-          )}
+        {/* Alerts Trend */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+          <h3 className="text-xl font-bold text-slate-800 mb-6">📈 Activity Timeline</h3>
+          <div className="h-[300px]">
+            <Line 
+              data={{
+                labels: trendChartData.labels,
+                datasets: [{
+                  label: 'Alerts',
+                  data: trendChartData.counts,
+                  borderColor: '#3b82f6',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  fill: true,
+                  tension: 0.4
+                }]
+              }}
+              options={{ maintainAspectRatio: false }}
+            />
+          </div>
+        </div>
+
+        {/* Threat Origins (IP Stats) */}
+        <div className="lg:col-span-1 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+          <h3 className="text-xl font-bold text-slate-800 mb-6">🌍 Threat Origins</h3>
+          <div className="space-y-4">
+            {ipStats.map((item) => (
+              <div key={item.country} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{item.flag}</span>
+                  <span className="font-semibold">{item.country}</span>
+                </div>
+                <span className="text-sm font-bold text-blue-600">{item.count}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-type StatCardProps = {
+// --- Sub-components ---
+interface StatCardProps {
   title: string;
   value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: any;
   gradient: string;
   trend: string;
   trendUp: boolean;
   isStatus?: boolean;
-};
+}
 
-function StatCard({ title, value, icon: Icon, gradient, trend, trendUp, isStatus = false }: StatCardProps) {
+function StatCard({ title, value, icon: Icon, gradient, trend, trendUp, isStatus }: StatCardProps) {
   return (
-    <div className="group bg-white p-1 rounded-2xl shadow-lg shadow-slate-200/50 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-      <div className="bg-white p-5 rounded-xl border border-slate-50 flex flex-col h-full">
-        <div className="flex justify-between items-start mb-6">
-          <div className={`p-3 rounded-2xl bg-gradient-to-br ${gradient} shadow-lg shadow-current/10 text-white group-hover:scale-110 transition-transform duration-300`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${trendUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-            {trend} {trendUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-          </div>
+    <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 hover:shadow-lg transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} text-white`}>
+          <Icon className="w-5 h-5" />
         </div>
-        <div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-          <p className={`font-black tracking-tight ${isStatus ? 'text-lg text-slate-700 truncate' : 'text-3xl text-slate-900'}`}>{value}</p>
-        </div>
+        <span className={`text-xs font-bold px-2 py-1 rounded ${trendUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+          {trend}
+        </span>
       </div>
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+      <p className={`font-black ${isStatus ? 'text-sm text-slate-600' : 'text-2xl text-slate-900'}`}>{value}</p>
     </div>
   );
 }
