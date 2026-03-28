@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { 
-  ShieldAlert, 
-  Activity, 
-  Zap, 
-  Target, 
-  ArrowUpRight, 
+import {
+  ShieldAlert,
+  Activity,
+  Zap,
+  Target,
+  ArrowUpRight,
   ArrowDownRight,
   Clock,
   RefreshCw
@@ -25,6 +25,7 @@ import {
 } from 'chart.js';
 import { Doughnut, Line } from 'react-chartjs-2';
 import AlertChart from '@/components/AlertChart';
+import { useEnrichedIPs } from '@/hooks/useEnrichedIPs';
 
 // --- Interfaces & Types ---
 interface Alert {
@@ -98,13 +99,8 @@ export default function Dashboard() {
     const match = log.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
     return match ? match[0] : null;
   };
-  
-  const mapIPToCountry = (ip: string): { country: string; flag: string } => {
-    if (ip.startsWith('192.')) return { country: 'Morocco', flag: '🇲🇦' };
-    if (ip.startsWith('10.')) return { country: 'France', flag: '🇫🇷' };
-    if (ip.startsWith('172.')) return { country: 'USA', flag: '🇺🇸' };
-    return { country: 'Unknown', flag: '🌐' };
-  };
+
+  // mapIPToCountry removed – replaced by useEnrichedIPs hook
 
   const extractHourFromLog = (log: string): number | null => {
     if (typeof log !== 'string' || log.length < 19) return null;
@@ -137,7 +133,7 @@ export default function Dashboard() {
 
         setAlerts(validatedAlerts);
         const mlAnomalies = validatedAlerts.filter((a) => a.cve_id === 'ML-ANOMALY').length;
-        
+
         setStats({
           total_alerts: validatedAlerts.length,
           critical_cves: validatedAlerts.filter((a) => a.cve_id.startsWith('CVE')).length,
@@ -174,20 +170,8 @@ export default function Dashboard() {
     return { tone: 'stable', message: 'System appears stable. No major threats.', criticals, anomalies };
   }, [alerts]);
 
-  const ipStats = useMemo(() => {
-    const counts: Record<string, { count: number; flag: string }> = {};
-    alerts.forEach(alert => {
-      if (!alert.log) return;
-      const ip = extractIPFromLog(alert.log);
-      if (!ip) return;
-      const { country, flag } = mapIPToCountry(ip);
-      if (!counts[country]) counts[country] = { count: 0, flag };
-      counts[country].count += 1;
-    });
-    return Object.entries(counts)
-      .map(([country, data]) => ({ country, ...data }))
-      .sort((a, b) => b.count - a.count);
-  }, [alerts]);
+  // --- Real-time IP enrichment ---
+  const { enrichedIPs, isLoadingGeo } = useEnrichedIPs(alerts);
 
   const trendChartData = useMemo(() => {
     const hourCounts: Record<number, number> = {};
@@ -239,7 +223,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-4">
-          <button 
+          <button
             onClick={fetchAlerts}
             disabled={isRefreshing}
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
@@ -256,7 +240,7 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-      
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Alerts" value={stats.total_alerts} icon={Activity} gradient="from-blue-500 to-indigo-600" trend="+12%" trendUp />
@@ -288,7 +272,7 @@ export default function Dashboard() {
         <div className="lg:col-span-1 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
           <h3 className="text-xl font-bold text-slate-800 mb-8">🎯 Threat Distribution</h3>
           <div className="h-[250px]">
-            <Doughnut 
+            <Doughnut
               data={{
                 labels: ['Critical', 'Anomalies', 'Other'],
                 datasets: [{
@@ -315,7 +299,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
           <h3 className="text-xl font-bold text-slate-800 mb-6">📈 Activity Timeline</h3>
           <div className="h-[300px]">
-            <Line 
+            <Line
               data={{
                 labels: trendChartData.labels,
                 datasets: [{
@@ -335,17 +319,47 @@ export default function Dashboard() {
         {/* Threat Origins (IP Stats) */}
         <div className="lg:col-span-1 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
           <h3 className="text-xl font-bold text-slate-800 mb-6">🌍 Threat Origins</h3>
-          <div className="space-y-4">
-            {ipStats.map((item) => (
-              <div key={item.country} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{item.flag}</span>
-                  <span className="font-semibold">{item.country}</span>
+
+          {/* Loading skeleton */}
+          {isLoadingGeo && (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!isLoadingGeo && enrichedIPs.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-6">No IP data available.</p>
+          )}
+
+          {/* Enriched IP list */}
+          {!isLoadingGeo && enrichedIPs.length > 0 && (
+            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+              {enrichedIPs.map((item) => (
+                <div
+                  key={item.ip}
+                  className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl leading-none">{item.flag}</span>
+                      <span className="font-bold text-slate-900 text-sm">{item.country}</span>
+                    </div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-700">
+                      🔢 {item.count}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500 mt-1 pl-8">
+                    <span>🏙️ {item.city}</span>
+                    <span>🧠 {item.org}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 pl-8 font-mono">{item.ip}</p>
                 </div>
-                <span className="text-sm font-bold text-blue-600">{item.count}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
