@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   ShieldAlert,
   Activity,
@@ -81,6 +81,11 @@ export default function Dashboard() {
   const [isExporting, setIsExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  // Simulation states
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const simulationRef = useRef<NodeJS.Timeout | null>(null);
+
   // --- Helpers ---
   const isAlertStatItem = useCallback((value: unknown): value is AlertStatItem => {
     return typeof value === 'object' && value !== null;
@@ -154,6 +159,83 @@ export default function Dashboard() {
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
+
+  // --- Real-time Simulation Logic ---
+  const simulateAttack = useCallback(() => {
+    // We use a pool of known public IPs from various countries so the map can light up.
+    // If we use completely random IPs, many fall into reserved/private spaces resulting in "Unknown" country.
+    // Since our ipGeoService caches by IP, this also prevents rate-limiting the IP lookup API.
+    const SIMULATED_IPS = [
+      "8.8.8.8", // US
+      "185.15.59.224", // Russia / Europe
+      "103.22.200.0", // Asia / China
+      "193.0.14.129", // Europe
+      "177.71.128.1", // Brazil / South America
+      "41.141.68.0", // Morocco / North Africa
+      "120.136.54.0", // India
+      "1.1.1.1", // Australia
+      "175.45.176.0", // North Korea (or Asia APNIC)
+      "197.234.219.0" // Nigeria / Africa
+    ];
+    
+    // Pick a completely random IP from the exact pool. 
+    // We intentionally DO NOT randomize the last octet because we want `ipGeoService.ts` to perfectly cache these 10 exact IPs 
+    // and prevent exhausting the free tier limits of `ipapi.co`.
+    const randomIP = SIMULATED_IPS[Math.floor(Math.random() * SIMULATED_IPS.length)];
+
+    const isAnomaly = Math.random() > 0.8;
+    const cveId = isAnomaly ? "ML-ANOMALY" : `CVE-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const severity = Math.floor(Math.random() * 10) + 1;
+    const threatScore = isAnomaly ? 9 : Math.floor(Math.random() * 3) + 7;
+    const now = new Date();
+    const logStr = `${now.toISOString().replace('T', ' ').slice(0, 19)} Suspicious activity from ${randomIP}`;
+
+    const newAlert: Alert = {
+      cve_id: cveId,
+      severity,
+      threat_score: threatScore,
+      soc_level: threatScore >= 9 ? 'Critical' : 'High',
+      log: logStr
+    };
+
+    setAlerts(prev => [newAlert, ...prev].slice(0, 100)); // Limit to 100
+    
+    // Update simple stats locally
+    setStats(prev => ({
+      total_alerts: prev.total_alerts + 1,
+      critical_cves: prev.critical_cves + (isAnomaly ? 0 : 1),
+      ml_anomalies: prev.ml_anomalies + (isAnomaly ? 1 : 0),
+      soc_level: isAnomaly || threatScore >= 9 ? 'SOC Level 2 - High Risk' : prev.soc_level,
+    }));
+    setLastUpdated(new Date());
+    
+    // Toast notification
+    setToastMessage(`🚨 New Threat Found: ${cveId} from ${randomIP}`);
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
+
+  const toggleSimulation = useCallback(() => {
+    if (isSimulating) {
+      if (simulationRef.current) clearInterval(simulationRef.current);
+      simulationRef.current = null;
+      setIsSimulating(false);
+      setToastMessage("⏹ Simulation Stopped");
+      setTimeout(() => setToastMessage(null), 2000);
+    } else {
+      setIsSimulating(true);
+      simulateAttack(); // Fire first immediately
+      simulationRef.current = setInterval(simulateAttack, 3500);
+      setToastMessage("▶️ Simulation Started");
+      setTimeout(() => setToastMessage(null), 2000);
+    }
+  }, [isSimulating, simulateAttack]);
+  
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (simulationRef.current) clearInterval(simulationRef.current);
+    };
+  }, []);
 
   // --- Memos for Charts & UI ---
   const topThreats = useMemo(() => {
@@ -231,6 +313,18 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-4">
+          <button
+            onClick={toggleSimulation}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg text-white ${
+              isSimulating 
+                ? 'bg-rose-500 hover:bg-rose-600 animate-pulse shadow-rose-500/30 ring-2 ring-rose-300' 
+                : 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-red-500/20'
+            }`}
+          >
+            <Zap className={`w-4 h-4 ${isSimulating ? 'animate-bounce' : ''}`} />
+            {isSimulating ? 'Stop Simulation' : 'Simulate Attack'}
+          </button>
+          
           <button
             onClick={fetchAlerts}
             disabled={isRefreshing}
@@ -387,6 +481,14 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <ShieldAlert className="w-5 h-5 text-red-400" />
+          <p className="font-bold text-sm tracking-wide">{toastMessage}</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -19,12 +19,30 @@ const UNKNOWN_GEO: IPGeoInfo = {
 // Module-level cache – survives across renders but resets on full page reload.
 const geoCache = new Map<string, IPGeoInfo>();
 
+const MOCK_IPS: Record<string, IPGeoInfo> = {
+  "8.8.8.8": { country: "United States", countryCode: "US", city: "Mountain View", org: "Simulated Attacker" },
+  "185.15.59.224": { country: "Russia", countryCode: "RU", city: "Moscow", org: "Simulated Attacker" },
+  "103.22.200.0": { country: "China", countryCode: "CN", city: "Beijing", org: "Simulated Attacker" },
+  "193.0.14.129": { country: "United Kingdom", countryCode: "GB", city: "London", org: "Simulated Attacker" },
+  "177.71.128.1": { country: "Brazil", countryCode: "BR", city: "São Paulo", org: "Simulated Attacker" },
+  "41.141.68.0": { country: "Morocco", countryCode: "MA", city: "Casablanca", org: "Simulated Attacker" },
+  "120.136.54.0": { country: "India", countryCode: "IN", city: "New Delhi", org: "Simulated Attacker" },
+  "1.1.1.1": { country: "Australia", countryCode: "AU", city: "Sydney", org: "Simulated Attacker" },
+  "175.45.176.0": { country: "North Korea", countryCode: "KP", city: "Pyongyang", org: "Simulated Attacker" },
+  "197.234.219.0": { country: "Nigeria", countryCode: "NG", city: "Lagos", org: "Simulated Attacker" }
+};
+
 /**
  * Fetch geolocation info for a single IP address.
  * Results are cached so the same IP is never looked up twice.
  */
 export async function fetchIPInfo(ip: string): Promise<IPGeoInfo> {
-  // Return cached result immediately if available
+  // 1. Check if it's one of our purely simulated IPs
+  if (MOCK_IPS[ip]) {
+    return MOCK_IPS[ip];
+  }
+
+  // 2. Return cached result immediately if available
   const cached = geoCache.get(ip);
   if (cached) return cached;
 
