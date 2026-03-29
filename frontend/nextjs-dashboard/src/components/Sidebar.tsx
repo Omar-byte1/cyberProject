@@ -26,6 +26,7 @@ export default function Sidebar() {
     { name: 'Live Monitor', href: '/live-monitor', icon: Activity },
     { name: 'IP Intel', href: '/ip-intel', icon: Globe },
     { name: 'AI Sandbox', href: '/sandbox', icon: FlaskConical },
+    { name: 'Incidents', href: '/incidents', icon: ShieldCheck },
     { name: 'Playbooks', href: '/playbooks', icon: BookOpen },
   ];
 

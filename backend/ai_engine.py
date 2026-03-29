@@ -169,32 +169,41 @@ class AIEngine:
 
     def analyze_context(self, analysis_type, content):
         """
-        Analyse un email (Phishing) ou un fichier (Malware) - SIMULATION.
+        Analyse un email (Phishing) ou un fichier (Malware) - SIMULATION AVANCÉE.
         """
         import random
-        
+        import time
+        from datetime import datetime
+
         if analysis_type == "email":
-            # Heuristiques de phishing
-            threats = []
+            # Heuristiques de phishing détaillées
             score = 0
+            indicators = []
             
-            urgent_keywords = ["urgent", "immédiat", "suspendu", "clôture", "cliquez ici", "vérifier"]
+            # 1. Analyse de Contenu
+            urgent_keywords = ["urgent", "immédiat", "suspendu", "clôture", "cliquez ici", "vérifier", "action requise"]
             if any(kw in content.lower() for kw in urgent_keywords):
                 score += 35
-                threats.append("Urgence injustifiée détectée")
+                indicators.append({"type": "Content", "detail": "Urgence injustifiée détectée", "risk": "High"})
                 
             if "http" in content.lower():
                 score += 25
-                threats.append("Liens externes suspects")
+                indicators.append({"type": "Link", "detail": "Liens externes suspects (Redirection potentielle)", "risk": "Medium"})
                 
-            if "mot de passe" in content.lower() or "password" in content.lower():
+            if any(kw in content.lower() for kw in ["mot de passe", "password", "identifiants"]):
                 score += 20
-                threats.append("Requête de données sensibles")
+                indicators.append({"type": "Privacy", "detail": "Requête de données sensibles", "risk": "High"})
                 
+            # 2. Simulation de Réputation (Mock)
+            reputation_score = random.randint(0, 100)
+            if reputation_score > 70:
+                score += 30
+                indicators.append({"type": "Reputation", "detail": "Expéditeur sur liste noire (Blacklisted)", "risk": "Critical"})
+            
             # Verdict
             if score > 50:
                 verdict = "Phishing Probable"
-                recommendation = "Ne cliquez sur aucun lien. Signalez l'email et supprimez-le."
+                recommendation = "Ne cliquez sur aucun lien. Signalez l'email et supprimez-le immédiatement."
             else:
                 score = max(5, score)
                 verdict = "Sain"
@@ -202,41 +211,86 @@ class AIEngine:
 
             return {
                 "type": "Email Phishing Analysis",
-                "risk_score": score,
-                "indicators": threats,
+                "risk_score": min(score, 100),
                 "verdict": verdict,
-                "recommendation": recommendation
+                "recommendation": recommendation,
+                "status": "Completed",
+                "timestamp": datetime.now().isoformat(),
+                "indicators": indicators,
+                "technical_details": {
+                    "spf_check": "Pass" if reputation_score < 50 else "Fail",
+                    "dkim_check": "Pass",
+                    "sender_ip": f"192.{random.randint(10,255)}.{random.randint(1,255)}.42",
+                    "tone_analysis": "Manipulative/Urgent" if score > 40 else "Neutral"
+                }
             }
 
         elif analysis_type == "file":
-            # Simulation de signatures de malwares
+            # Simulation plus technique pour un malware
             malware_families = {
-                "WannaCry.A": {"type": "Ransomware", "danger": 98},
-                "Emotet.v4": {"type": "Trojan / Stealer", "danger": 92},
-                "Pegasus.Lite": {"type": "Spyware", "danger": 95},
-                "Generic.Crypt": {"type": "Heuristic.Anomaly", "danger": 65}
+                "WannaCry.A": {"type": "Ransomware", "danger": 98, "behavior": ["Shadow Copy Deletion", "File Encryption", "Tor Communication"]},
+                "Emotet.v4": {"type": "Trojan / Stealer", "danger": 92, "behavior": ["Registry Run Key", "Hooking Browsers", "Keylogging"]},
+                "Pegasus.Lite": {"type": "Spyware", "danger": 95, "behavior": ["Microphone Access", "GPS Tracking", "Exfiltration via HTTPS"]},
+                "AgentTesla": {"type": "Infostealer", "danger": 88, "behavior": ["SMTP Exfiltration", "Process Hollowing", "Credential Scrapers"]},
+                "CobaltStrike.Beacon": {"type": "Hacktool/C2", "danger": 90, "behavior": ["Reflective Injection", "C2 Communication", "SMB Pivoting"]}
             }
             
-            # Simulated matching logic
-            is_malicious = random.random() > 0.4
+            is_malicious = random.random() > 0.3 # 70% chance of threat for the demo
             
             if is_malicious:
                 name, info = random.choice(list(malware_families.items()))
+                
+                # Mock Behavioral Logs
+                behavior_logs = [
+                    f"[SYSTEM] Process started (PID: {random.randint(1000, 9999)})",
+                    f"[FS] Created file: C:\\Windows\\Temp\\{name.lower()}.tmp",
+                    f"[REG] Registry Key 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SysUpdate' modified",
+                    f"[NET] Connection attempt to C2 Server (8.8.4.4:443)",
+                    f"[API] Call detected: CryptEncrypt (Sensitive API call)"
+                ]
+                
                 return {
                     "type": "Binary Malware Analysis",
                     "risk_score": info["danger"],
-                    "indicators": [f"Signature match: {name}", f"Behavior: {info['type']}"],
                     "verdict": "Malware Détecté",
-                    "recommendation": "Isoler la machine hôte et lancer un scan complet EDR."
+                    "family": name,
+                    "malware_type": info["type"],
+                    "recommendation": "Isoler la machine hôte immédiatement et initier le playbook d'incident (Containment).",
+                    "status": "Malicious",
+                    "timestamp": datetime.now().isoformat(),
+                    "indicators": [
+                        {"type": "Signature", "detail": f"Match: {name}", "risk": "Critical"},
+                        {"type": "Behavior", "detail": info["type"], "risk": "High"},
+                        {"type": "Entropy", "detail": f"{random.uniform(7.1, 7.9):.2f} (Packed/Obfuscated)", "risk": "High"}
+                    ],
+                    "behavior_logs": behavior_logs + [f"[THREAT] {b}" for b in info["behavior"]],
+                    "mitre_attack": [
+                        {"id": "T1059", "name": "Command and Scripting Interpreter"},
+                        {"id": "T1547", "name": "Boot or Logon Autostart Execution"},
+                        {"id": "T1027", "name": "Obfuscated Files or Information"}
+                    ]
                 }
             else:
                 return {
                     "type": "Binary Malware Analysis",
-                    "risk_score": 5,
-                    "indicators": ["Aucune signature connue", "Entropie normale"],
+                    "risk_score": 3,
                     "verdict": "Fichier Sain",
-                    "recommendation": "Aucune menace détectée."
+                    "recommendation": "Aucune menace détectée. Le fichier peut être ouvert en sécurité.",
+                    "status": "Clean",
+                    "timestamp": datetime.now().isoformat(),
+                    "indicators": [
+                        {"type": "Signature", "detail": "Aucune correspondance trouvée", "risk": "Low"},
+                        {"type": "Heuristic", "detail": "Comportement normal détecté", "risk": "Low"}
+                    ],
+                    "behavior_logs": [
+                        "[SYSTEM] Process started (PID: 1204)",
+                        "[FS] Reading local configuration files",
+                        "[API] Normal Windows API usage detected",
+                        "[SYSTEM] Process exited gracefully (Code 0)"
+                    ]
                 }
+        
+        return {"error": "Type d'analyse inconnu."}
         
         
         return {"error": "Type d'analyse inconnu."}

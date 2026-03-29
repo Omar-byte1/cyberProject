@@ -28,6 +28,13 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORT_FILE = os.path.join(BASE_DIR, "data", "threat_report.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "data", "alerts.json")
+INCIDENTS_FILE = os.path.join(BASE_DIR, "data", "incidents.json")
+
+# Ensure data directory exists
+os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+if not os.path.exists(INCIDENTS_FILE):
+    with open(INCIDENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump([], f)
 
 engine = AIEngine()
 
@@ -52,6 +59,15 @@ class IPActionRequest(BaseModel):
     action: str  # "block", "monitor", "ignore"
 
 
+class IncidentRecord(BaseModel):
+    id: str
+    type: str
+    verdict: str
+    risk_score: int
+    timestamp: str
+    details: dict
+
+
 def require_admin(current_user: dict[str, str] = Depends(get_current_user)) -> dict[str, str]:
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
@@ -63,7 +79,7 @@ def root():
     return {
         "project": "Cyber Threat AI Project",
         "status": "online",
-        "endpoints": ["/login", "/run-analysis", "/threat-report", "/alerts", "/live-traffic", "/ip-lookup/{ip}", "/analyze-sandbox", "/playbooks"],
+        "endpoints": ["/login", "/run-analysis", "/threat-report", "/alerts", "/live-traffic", "/ip-lookup/{ip}", "/analyze-sandbox", "/playbooks", "/incidents"],
     }
 
 
@@ -162,6 +178,31 @@ def get_playbook_details(playbook_id: str, _: dict[str, str] = Depends(get_curre
     Retourne les étapes d'un playbook spécifique.
     """
     return engine.get_playbook_steps(playbook_id)
+
+
+@app.get("/incidents")
+def get_incidents(_: dict[str, str] = Depends(get_current_user)):
+    """
+    Liste tous les incidents enregistrés.
+    """
+    with open(INCIDENTS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.post("/incidents")
+def add_incident(incident: IncidentRecord, _: dict[str, str] = Depends(get_current_user)):
+    """
+    Enregistre un nouvel incident.
+    """
+    with open(INCIDENTS_FILE, "r", encoding="utf-8") as f:
+        incidents = json.load(f)
+    
+    incidents.insert(0, incident.dict())
+    
+    with open(INCIDENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(incidents, f, indent=4)
+        
+    return {"status": "success", "incident_id": incident.id}
 
 
 if __name__ == "__main__":

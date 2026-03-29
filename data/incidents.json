@@ -1,0 +1,82 @@
+[
+    {
+        "id": "INC-66764",
+        "type": "Email Phishing Analysis",
+        "verdict": "Sain",
+        "risk_score": 5,
+        "timestamp": "2026-03-29T18:48:40.828Z",
+        "details": {
+            "type": "Email Phishing Analysis",
+            "risk_score": 5,
+            "verdict": "Sain",
+            "recommendation": "L'email semble l\u00e9gitime, restez toujours vigilant.",
+            "status": "Completed",
+            "timestamp": "2026-03-29T19:48:29.249373",
+            "indicators": [],
+            "technical_details": {
+                "spf_check": "Pass",
+                "dkim_check": "Pass",
+                "sender_ip": "192.193.226.42",
+                "tone_analysis": "Neutral"
+            }
+        }
+    },
+    {
+        "id": "INC-18022",
+        "type": "Binary Malware Analysis",
+        "verdict": "Malware D\u00e9tect\u00e9",
+        "risk_score": 98,
+        "timestamp": "2026-03-29T18:43:59.241Z",
+        "details": {
+            "type": "Binary Malware Analysis",
+            "risk_score": 98,
+            "verdict": "Malware D\u00e9tect\u00e9",
+            "family": "WannaCry.A",
+            "malware_type": "Ransomware",
+            "recommendation": "Isoler la machine h\u00f4te imm\u00e9diatement et initier le playbook d'incident (Containment).",
+            "status": "Malicious",
+            "timestamp": "2026-03-29T19:43:58.015921",
+            "indicators": [
+                {
+                    "type": "Signature",
+                    "detail": "Match: WannaCry.A",
+                    "risk": "Critical"
+                },
+                {
+                    "type": "Behavior",
+                    "detail": "Ransomware",
+                    "risk": "High"
+                },
+                {
+                    "type": "Entropy",
+                    "detail": "7.87 (Packed/Obfuscated)",
+                    "risk": "High"
+                }
+            ],
+            "behavior_logs": [
+                "[SYSTEM] Process started (PID: 6981)",
+                "[FS] Created file: C:\\Windows\\Temp\\wannacry.a.tmp",
+                "[REG] Registry Key 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SysUpdate' modified",
+                "[NET] Connection attempt to C2 Server (8.8.4.4:443)",
+                "[API] Call detected: CryptEncrypt (Sensitive API call)",
+                "[THREAT] Shadow Copy Deletion",
+                "[THREAT] File Encryption",
+                "[THREAT] Tor Communication"
+            ],
+            "mitre_attack": [
+                {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter"
+                },
+                {
+                    "id": "T1547",
+                    "name": "Boot or Logon Autostart Execution"
+                },
+                {
+                    "id": "T1027",
+                    "name": "Obfuscated Files or Information"
+                }
+            ]
+        }
+    }
+]
