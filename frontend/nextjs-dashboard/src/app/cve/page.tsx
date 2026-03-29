@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import rawCves from '../../../../../data/clean_cve.json';
-import { ExternalLink, Search, ShieldAlert, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ExternalLink, Search, ShieldAlert, ChevronDown, ChevronUp, X, Flame } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useAlertContext } from '@/contexts/AlertContext';
 
 interface CveItem {
   cve_id: string;
@@ -24,15 +25,43 @@ function getSeverityClasses(severity: string): string {
 export default function CveExplorerPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [cvesPerPage] = useState<number>(10);
+  const { alerts } = useAlertContext();
+
+  const activeCveIds = useMemo(() => {
+    return new Set(alerts.map(a => a.cve_id));
+  }, [alerts]);
 
   const filteredCves = useMemo(() => {
+    let result = cves;
+
+    if (showActiveOnly) {
+      result = result.filter(cve => activeCveIds.has(cve.cve_id));
+    }
+
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return cves.slice(0, 50); // Limit initial view for performance
-    return cves.filter((cve) => 
-      cve.cve_id.toLowerCase().includes(term) || 
-      cve.description.toLowerCase().includes(term)
-    );
-  }, [searchTerm]);
+    if (term) {
+      result = result.filter((cve) => 
+        cve.cve_id.toLowerCase().includes(term) || 
+        cve.description.toLowerCase().includes(term)
+      );
+    }
+
+    return result;
+  }, [searchTerm, showActiveOnly, activeCveIds]);
+
+  // Reset to first page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchTerm, showActiveOnly]);
+
+  // Pagination bounds
+  const indexOfLastCve = currentPage * cvesPerPage;
+  const indexOfFirstCve = indexOfLastCve - cvesPerPage;
+  const currentCves = filteredCves.slice(indexOfFirstCve, indexOfLastCve);
+  const totalPages = Math.ceil(filteredCves.length / cvesPerPage) || 1;
 
   const toggleDetails = (id: string) => {
     const next = new Set(expandedIds);
@@ -61,34 +90,48 @@ export default function CveExplorerPage() {
         </div>
       </section>
 
-      {/* Search Bar */}
+      {/* Search Bar & Active Filter */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-4 shadow-sm backdrop-blur sm:p-5">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by ID or keywords (e.g. 'Buffer Overflow')..."
-            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent py-3 pl-10 pr-10 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:focus:ring-blue-500/20 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-          />
-          {searchTerm && (
-            <button 
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by ID or keywords (e.g. 'Buffer Overflow')..."
+              className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent py-3 pl-10 pr-10 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:focus:ring-blue-500/20 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          
+          <button
+            onClick={() => setShowActiveOnly(!showActiveOnly)}
+            className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${
+              showActiveOnly 
+                ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 shadow-inner' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Flame className={`w-4 h-4 ${showActiveOnly ? 'animate-pulse' : ''}`} />
+            Active Threats ({activeCveIds.size})
+          </button>
         </div>
-        <p className="mt-2 text-[10px] font-medium uppercase tracking-widest text-slate-400 dark:text-slate-500">
+        <p className="mt-2 text-[10px] font-medium uppercase tracking-widest text-slate-400 dark:text-slate-500 px-2">
           Showing {filteredCves.length} results
         </p>
       </div>
 
       {/* Results Grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {filteredCves.map((cve) => {
+        {currentCves.map((cve) => {
           const isExpanded = expandedIds.has(cve.cve_id);
           return (
             <article key={cve.cve_id} className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-all hover:shadow-md">
@@ -127,6 +170,27 @@ export default function CveExplorerPage() {
             </article>
           );
         })}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-center items-center gap-4 py-8">
+        <button 
+          disabled={currentPage === 1} 
+          onClick={() => setCurrentPage(p => p - 1)} 
+          className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          Previous
+        </button>
+        <div className="px-5 py-2 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-inner">
+          Page {currentPage} of {totalPages}
+        </div>
+        <button 
+          disabled={currentPage >= totalPages} 
+          onClick={() => setCurrentPage(p => p + 1)} 
+          className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          Next
+        </button>
       </div>
     </main>
   );
