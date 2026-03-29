@@ -26,6 +26,7 @@ import {
 import { Doughnut, Line } from 'react-chartjs-2';
 import AlertChart from '@/components/AlertChart';
 import { useEnrichedIPs } from '@/hooks/useEnrichedIPs';
+import WorldMap, { ThreatLocation } from '@/components/WorldMap';
 
 // --- Interfaces & Types ---
 interface Alert {
@@ -172,6 +173,13 @@ export default function Dashboard() {
 
   // --- Real-time IP enrichment ---
   const { enrichedIPs, isLoadingGeo } = useEnrichedIPs(alerts);
+
+  const mapData: ThreatLocation[] = useMemo(() => {
+    return enrichedIPs.map(item => ({
+      country: item.country,
+      count: item.count
+    }));
+  }, [enrichedIPs]);
 
   const trendChartData = useMemo(() => {
     const hourCounts: Record<number, number> = {};
@@ -359,6 +367,23 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Global Threat Map */}
+        <div className="lg:col-span-3 bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 z-10 relative">
+          <div className="mb-6 flex items-center justify-between">
+            <h3 className="text-xl font-bold text-slate-800">🌍 Global Threat Map</h3>
+            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-100 shadow-sm shadow-indigo-100/50">Live Origins</span>
+          </div>
+          {isLoadingGeo ? (
+            <div className="w-full h-[400px] sm:h-[500px] flex gap-2 flex-col items-center justify-center animate-pulse bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="w-16 h-16 rounded-full bg-slate-200 mb-4 animate-bounce" />
+                <div className="w-48 h-4 rounded-full bg-slate-200" />
+                <div className="w-32 h-3 rounded-full bg-slate-200" />
+            </div>
+          ) : (
+            <WorldMap data={mapData} />
           )}
         </div>
       </div>
