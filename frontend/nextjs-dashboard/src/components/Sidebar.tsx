@@ -8,7 +8,11 @@ import {
   ShieldAlert, 
   FileText, 
   ShieldCheck,
-  LogOut
+  LogOut,
+  Activity,
+  Globe,
+  FlaskConical,
+  BookOpen
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +23,10 @@ export default function Sidebar() {
     { name: 'Alerts', href: '/alerts', icon: AlertCircle },
     { name: 'CVE Intel', href: '/cve', icon: ShieldAlert },
     { name: 'Threat Report', href: '/threat-report', icon: FileText },
+    { name: 'Live Monitor', href: '/live-monitor', icon: Activity },
+    { name: 'IP Intel', href: '/ip-intel', icon: Globe },
+    { name: 'AI Sandbox', href: '/sandbox', icon: FlaskConical },
+    { name: 'Playbooks', href: '/playbooks', icon: BookOpen },
   ];
 
   const handleLogout = (): void => {
