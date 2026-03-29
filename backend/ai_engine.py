@@ -1,5 +1,9 @@
 import json
 import os
+import random
+import time
+from datetime import datetime
+
 
 class AIEngine:
 
@@ -74,8 +78,6 @@ class AIEngine:
         """
         Simule des paquets réseau en temps réel avec des scores d'anomalies.
         """
-        import random
-        import time
 
         protocols = ["TCP", "UDP", "HTTP", "HTTPS", "ICMP", "SSH", "FTP"]
         source_ips = ["192.168.1.10", "10.0.0.5", "172.16.2.30", "45.78.1.12", "185.23.4.99", "8.8.8.8"]
@@ -164,16 +166,13 @@ class AIEngine:
             },
             "threat_types": threat_types,
             "recommendation": recommendation,
-            "last_seen": "2026-03-29 17:35:00"
+            "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
     def analyze_context(self, analysis_type, content):
         """
         Analyse un email (Phishing) ou un fichier (Malware) - SIMULATION AVANCÉE.
         """
-        import random
-        import time
-        from datetime import datetime
 
         if analysis_type == "email":
             # Heuristiques de phishing détaillées

@@ -3,6 +3,7 @@ import os
 import json
 from sklearn.ensemble import IsolationForest
 import numpy as np
+import math
 
 class AnomalyDetector:
     def __init__(self):
@@ -13,11 +14,12 @@ class AnomalyDetector:
 
     def extract_features(self, log_lines):
         """
-        Extrait des caractéristiques numériques des lignes de logs pour le ML.
+        Extrait des caractéristiques numériques avancées des lignes de logs pour le ML.
         """
         features = []
         for line in log_lines:
-            parts = line.strip().split(',')
+            line = line.strip()
+            parts = line.split(',')
             if len(parts) < 3:
                 continue
             
@@ -29,11 +31,42 @@ class AnomalyDetector:
             level_str = parts[1]
             level = level_map.get(level_str, 0)
             
-            # Feature 3: Présence de mots clés suspects (0 ou 1)
-            suspect_keywords = ["malicious", "exploit", "failed", "root", "admin", "cve"]
-            has_suspect = 1 if any(kw in line.lower() for kw in suspect_keywords) else 0
+            # Feature 3: Score de mots clés pondérés (STEP 2)
+            danger_keywords = {
+                "rm -rf": 5.0,
+                "sudo": 2.0,
+                "failed": 0.5,
+                "root": 1.5,
+                "admin": 1.0,
+                "exploit": 4.0,
+                "malicious": 3.0,
+                "cve": 2.5,
+                "base64": 2.0,
+                "\\x": 4.5  # Shellcode / Hex
+            }
+            weighted_score = sum(weight for kw, weight in danger_keywords.items() if kw in line.lower())
+
+            # --- NOUVELLES FEATURES (STEP 1) ---
+            # ... (Entropie moved down for clarity)
+
+            # Feature 4: Entropie de Shannon
+            entropy = 0
+            if length > 0:
+                prob = [float(line.count(c)) / length for c in set(line)]
+                entropy = - sum([p * math.log(p, 2) for p in prob])
+
+            # Feature 5: Compte de caractères spéciaux
+            special_chars = set("!@#$%^&*()[]{};:'\"<>, /\\|")
+            spec_count = sum(1 for c in line if c in special_chars)
+
+            # Feature 6: Ratio de chiffres
+            digit_count = sum(1 for c in line if c.isdigit())
+            digit_ratio = digit_count / length if length > 0 else 0
+
+            # Feature 7: Profondeur de Chemin (STEP 2)
+            path_depth = line.count('/')
             
-            features.append([length, level, has_suspect])
+            features.append([length, level, weighted_score, entropy, spec_count, digit_ratio, path_depth])
         
         return np.array(features)
 

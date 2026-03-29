@@ -1,5 +1,113 @@
 [
     {
+        "id": "INC-20810",
+        "type": "Email Phishing Analysis",
+        "verdict": "Sain",
+        "risk_score": 5,
+        "timestamp": "2026-03-29T21:11:32.233Z",
+        "details": {
+            "type": "Email Phishing Analysis",
+            "risk_score": 5,
+            "verdict": "Sain",
+            "recommendation": "L'email semble l\u00e9gitime, restez toujours vigilant.",
+            "status": "Completed",
+            "timestamp": "2026-03-29T22:11:30.589510",
+            "indicators": [],
+            "technical_details": {
+                "spf_check": "Pass",
+                "dkim_check": "Pass",
+                "sender_ip": "192.14.225.42",
+                "tone_analysis": "Neutral"
+            }
+        }
+    },
+    {
+        "id": "INC-28500",
+        "type": "Email Phishing Analysis",
+        "verdict": "Sain",
+        "risk_score": 30,
+        "timestamp": "2026-03-29T21:06:40.455Z",
+        "details": {
+            "type": "Email Phishing Analysis",
+            "risk_score": 30,
+            "verdict": "Sain",
+            "recommendation": "L'email semble l\u00e9gitime, restez toujours vigilant.",
+            "status": "Completed",
+            "timestamp": "2026-03-29T22:06:22.482367",
+            "indicators": [
+                {
+                    "type": "Reputation",
+                    "detail": "Exp\u00e9diteur sur liste noire (Blacklisted)",
+                    "risk": "Critical"
+                }
+            ],
+            "technical_details": {
+                "spf_check": "Fail",
+                "dkim_check": "Pass",
+                "sender_ip": "192.184.49.42",
+                "tone_analysis": "Neutral"
+            }
+        }
+    },
+    {
+        "id": "INC-84447",
+        "type": "Binary Malware Analysis",
+        "verdict": "Malware D\u00e9tect\u00e9",
+        "risk_score": 90,
+        "timestamp": "2026-03-29T20:56:11.478Z",
+        "details": {
+            "type": "Binary Malware Analysis",
+            "risk_score": 90,
+            "verdict": "Malware D\u00e9tect\u00e9",
+            "family": "CobaltStrike.Beacon",
+            "malware_type": "Hacktool/C2",
+            "recommendation": "Isoler la machine h\u00f4te imm\u00e9diatement et initier le playbook d'incident (Containment).",
+            "status": "Malicious",
+            "timestamp": "2026-03-29T21:56:06.544182",
+            "indicators": [
+                {
+                    "type": "Signature",
+                    "detail": "Match: CobaltStrike.Beacon",
+                    "risk": "Critical"
+                },
+                {
+                    "type": "Behavior",
+                    "detail": "Hacktool/C2",
+                    "risk": "High"
+                },
+                {
+                    "type": "Entropy",
+                    "detail": "7.27 (Packed/Obfuscated)",
+                    "risk": "High"
+                }
+            ],
+            "behavior_logs": [
+                "[SYSTEM] Process started (PID: 9213)",
+                "[FS] Created file: C:\\Windows\\Temp\\cobaltstrike.beacon.tmp",
+                "[REG] Registry Key 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SysUpdate' modified",
+                "[NET] Connection attempt to C2 Server (8.8.4.4:443)",
+                "[API] Call detected: CryptEncrypt (Sensitive API call)",
+                "[THREAT] Reflective Injection",
+                "[THREAT] C2 Communication",
+                "[THREAT] SMB Pivoting"
+            ],
+            "mitre_attack": [
+                {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter"
+                },
+                {
+                    "id": "T1547",
+                    "name": "Boot or Logon Autostart Execution"
+                },
+                {
+                    "id": "T1027",
+                    "name": "Obfuscated Files or Information"
+                }
+            ]
+        }
+    },
+    {
         "id": "INC-37199",
         "type": "Binary Malware Analysis",
         "verdict": "Malware D\u00e9tect\u00e9",
