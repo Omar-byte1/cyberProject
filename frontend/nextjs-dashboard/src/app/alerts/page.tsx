@@ -11,17 +11,9 @@ import {
   Activity, // Ajouté pour les anomalies ML
   Download
 } from 'lucide-react';
-
-export interface Alert {
-  cve_id: string;
-  log: string;
-  alert: string; 
-  soc_level?: string;
-  threat_score?: number;
-  severity?: number;
-  prediction?: string;
-  recommendation?: string;
-}
+import { ThemeToggle } from '@/components/ThemeToggle';
+import AICopilot from '@/components/AICopilot';
+import { useAlertContext, Alert } from '@/contexts/AlertContext';
 
 const SOC_LEVEL_OPTIONS = [
   { label: 'All', value: 'ALL' },
@@ -65,9 +57,7 @@ function parseLogTimestamp(log: string): Date | null {
 }
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const { alerts, fetchAlerts, isLoading } = useAlertContext();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const copiedTimeoutRef = useRef<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -93,44 +83,22 @@ export default function AlertsPage() {
     } catch (err) { console.error("Clipboard error", err); }
   }, []);
 
-  const fetchAlerts = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const token = window.localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:8000/alerts', {
-        cache: 'no-store',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const json = await res.json();
-      if (!Array.isArray(json)) throw new Error('Invalid format');
-
-      const enriched: Alert[] = json.map((a: any) => {
-        const threatScore = computeThreatScore(a);
-        const socLevel = a.soc_level || computeSocLevel(threatScore);
-        return { ...a, threat_score: threatScore, soc_level: socLevel };
-      });
-
-      setAlerts(enriched);
-      setError(null);
-    } catch {
-      setError('Failed to load alerts');
-    } finally {
-      setIsLoading(false);
+  // Sync or reload data explicitly if empty on mount
+  useEffect(() => { 
+    if (alerts.length === 0 && !isLoading) {
+      void fetchAlerts(); 
     }
-  }, []);
-
-  useEffect(() => { void fetchAlerts(); }, [fetchAlerts]);
+  }, [fetchAlerts, alerts.length, isLoading]);
 
   // Filters & Sorting
   const filteredAlerts = alerts.filter((alert) => {
+    const safeLog = alert.log || '';
     const matchesSearch = alert.cve_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          alert.log.toLowerCase().includes(searchTerm.toLowerCase());
+                          safeLog.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filter === 'ALL' || alert.soc_level === filter;
     const matchesTime = (() => {
       if (timeFilter === 'ALL') return true;
-      const ts = parseLogTimestamp(alert.log);
+      const ts = parseLogTimestamp(safeLog);
       if (!ts) return false;
       const windowMs = timeFilter === 'LAST_1H' ? 3600000 : 86400000;
       return (Date.now() - ts.getTime()) <= windowMs;
@@ -152,9 +120,10 @@ export default function AlertsPage() {
 
   const exportCSV = () => {
     const header = ['CVE_ID', 'Log', 'Severity', 'SOC_Level', 'Threat_Score'];
-    const rows = sortedAlerts.map(a => [
-      `"${a.cve_id}"`, `"${a.log.replace(/"/g, '""')}"`, a.severity, `"${a.soc_level}"`, a.threat_score
-    ].join(','));
+    const rows = sortedAlerts.map(a => {
+      const safeLog = a.log || '';
+      return [`"${a.cve_id}"`, `"${safeLog.replace(/"/g, '""')}"`, a.severity, `"${a.soc_level}"`, a.threat_score].join(',');
+    });
     const csvContent = [header.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -165,31 +134,34 @@ export default function AlertsPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 p-6 bg-slate-50 min-h-screen">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 p-6 bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors">
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
-            Security Alerts
-          </h1>
-          <p className="text-slate-500 mt-2 font-medium flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+              Security Alerts
+            </h1>
+            <ThemeToggle />
+          </div>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-500" />
             Real-time monitoring of correlated threats and anomalies
           </p>
         </div>
         
-        <div className="bg-white/80 backdrop-blur rounded-3xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-4 items-end">
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 flex flex-wrap gap-4 items-end">
           <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
             <input 
               type="text" placeholder="Search..." 
-              className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64"
+              className="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
           <select 
-            className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl text-sm outline-none"
             value={filter} onChange={(e) => setFilter(e.target.value as SocLevelOption)}
           >
             {SOC_LEVEL_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -202,13 +174,13 @@ export default function AlertsPage() {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
         {isLoading ? (
           <div className="p-20 text-center animate-pulse text-slate-400 font-bold">Fetching latest threats...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/80 uppercase text-[10px] font-black text-slate-400 tracking-widest">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800">
+              <thead className="bg-slate-50/80 dark:bg-slate-800/50 uppercase text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-widest">
                 <tr>
                   <th className="px-8 py-5 text-left">Indicator</th>
                   <th className="px-8 py-5 text-left">Log Detail</th>
@@ -216,18 +188,18 @@ export default function AlertsPage() {
                   <th className="px-8 py-5 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                 {currentAlerts.map((alert, idx) => (
-                  <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                  <tr key={idx} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${alert.cve_id === 'ML-ANOMALY' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
+                        <div className={`p-2 rounded-lg ${alert.cve_id === 'ML-ANOMALY' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'}`}>
                           {alert.cve_id === 'ML-ANOMALY' ? <Activity className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
                         </div>
-                        <span className="font-mono font-bold text-sm">{alert.cve_id}</span>
+                        <span className="font-mono font-bold text-sm text-slate-800 dark:text-slate-200">{alert.cve_id}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6 max-w-md truncate text-sm text-slate-600">{alert.log}</td>
+                    <td className="px-8 py-6 max-w-md truncate text-sm text-slate-600 dark:text-slate-400">{alert.log}</td>
                     <td className="px-8 py-6">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${alert.threat_score! >= 7 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
                         {alert.threat_score}
@@ -259,28 +231,28 @@ export default function AlertsPage() {
       {/* MODAL COMPLET */}
       {isOpen && selectedAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={closeModal}>
-          <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="px-8 py-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+          <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="px-8 py-6 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-black text-slate-900">Alert Deep Dive</h2>
-                <p className="text-sm font-mono text-blue-600">{selectedAlert.cve_id}</p>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">Alert Deep Dive</h2>
+                <p className="text-sm font-mono text-blue-600 dark:text-blue-400">{selectedAlert.cve_id}</p>
               </div>
               <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400 text-2xl">×</button>
             </div>
 
             <div className="p-8 space-y-6">
               <div className="grid grid-cols-3 gap-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Severity</p>
-                  <p className="text-2xl font-black text-slate-900">{selectedAlert.severity || 'N/A'}</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{selectedAlert.severity || 'N/A'}</p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Threat Score</p>
-                  <p className="text-2xl font-black text-slate-900">{selectedAlert.threat_score}</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{selectedAlert.threat_score}</p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SOC Level</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedAlert.soc_level}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{selectedAlert.soc_level}</p>
                 </div>
               </div>
 
@@ -292,34 +264,37 @@ export default function AlertsPage() {
               </div>
 
               {selectedAlert.prediction && (
-                <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-2xl">
                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">AI Prediction</p>
-                  <p className="text-sm text-blue-900 font-medium">{selectedAlert.prediction}</p>
+                  <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">{selectedAlert.prediction}</p>
                 </div>
               )}
 
               {selectedAlert.recommendation && (
-                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl">
                   <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Action Recommendation</p>
-                  <p className="text-sm text-emerald-900 font-medium">{selectedAlert.recommendation}</p>
+                  <p className="text-sm text-emerald-900 dark:text-emerald-200 font-medium">{selectedAlert.recommendation}</p>
                 </div>
               )}
             </div>
 
-            <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="px-8 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
               <button 
                 onClick={() => copyToClipboard(JSON.stringify(selectedAlert, null, 2), 'json')}
                 className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
               >
                 {copiedField === 'json' ? 'Copied!' : 'Copy JSON'}
               </button>
-              <button onClick={closeModal} className="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all">
+              <button onClick={closeModal} className="px-6 py-2 bg-slate-900 dark:bg-slate-700 text-white text-sm font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all">
                 Dismiss
               </button>
             </div>
           </div>
         </div>
       )}
+      
+      {/* AICopilot Injection */}
+      <AICopilot alerts={alerts} />
     </div>
   );
 }
