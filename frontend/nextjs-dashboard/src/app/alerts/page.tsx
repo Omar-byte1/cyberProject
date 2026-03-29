@@ -190,7 +190,7 @@ export default function AlertsPage() {
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                 {currentAlerts.map((alert, idx) => (
-                  <tr key={idx} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={`${alert.cve_id}-${idx}`} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${alert.cve_id === 'ML-ANOMALY' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'}`}>

@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: cyber-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      - ENV=dev
+
+  frontend:
+    build:
+      context: ./frontend/nextjs-dashboard
+    container_name: cyber-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/nextjs-dashboard:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: cyber-network

@@ -312,10 +312,26 @@ class AIEngine:
                         {"id": "p4", "title": "Blocage des domaines", "advice": "Ajoutez les domaines détectés à la Blacklist DNS."}
                     ]
                 }
+            ],
+            "brute-force": [
+                {
+                    "phase": "Mitigation",
+                    "tasks": [
+                        {"id": "bf1", "title": "Identifier l'IP source", "advice": "Consultez les échecs de connexion répétés dans les journaux d'audit."},
+                        {"id": "bf2", "title": "Bloquer l'IP au niveau local", "advice": "Ajoutez l'IP à la politique de restriction de l'hôte (Fail2Ban/Windows FW)."}
+                    ]
+                },
+                {
+                    "phase": "Hardening",
+                    "tasks": [
+                        {"id": "bf3", "title": "Activer le MFA", "advice": "Forcez l'authentification multi-facteurs pour tous les accès distants."},
+                        {"id": "bf4", "title": "Changer le port par défaut", "advice": "Modifiez le port d'écoute standard pour réduire le bruit de fond."}
+                    ]
+                }
             ]
         }
         
-        return playbooks_data.get(playbook_id, [{"error": "Playbook non trouvé."}])
+        return playbooks_data.get(playbook_id, [])
 
 if __name__ == "__main__":
 

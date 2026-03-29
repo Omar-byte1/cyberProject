@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps';
+import React, { useMemo } from 'react';
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from '@vnedyalk0v/react19-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Tooltip } from 'react-tooltip';
 import { useTheme } from 'next-themes';
 import 'react-tooltip/dist/react-tooltip.css';
 
-// Standard high-quality topological map of the world
 const GEO_URL = "https://unpkg.com/world-atlas@2.0.2/countries-110m.json";
 
 export type ThreatLocation = {
@@ -20,49 +19,37 @@ export type WorldMapProps = {
 };
 
 export default function WorldMap({ data }: WorldMapProps) {
-  const [tooltipContent, setTooltipContent] = useState('');
-  const { theme, systemTheme } = useTheme();
-  
-  // Resolve true theme since it could be 'system' initially
-  const isDark = theme === 'dark' || (theme === 'system' && systemTheme === 'dark');
+  const { theme, resolvedTheme } = useTheme();
 
-  // Normalize data for easy lookup and calculate max threats
+  // Utilisation de resolvedTheme qui gère déjà la logique system + theme
+  const isDark = resolvedTheme === 'dark';
+
   const { countryCounts, maxCount } = useMemo(() => {
     const counts: Record<string, number> = {};
     let max = 0;
-    
+
     data.forEach((item) => {
-      // Basic normalization
       let key = item.country.trim();
-      
-      // Known mismatches matching our custom dataset / IP geo API to TopoJSON properties.name
+
       const mapping: Record<string, string> = {
         'United States': 'United States of America',
         'USA': 'United States of America',
         'UK': 'United Kingdom',
-        'Russia': 'Russia', // Typically matches, but just in case
         'South Korea': 'South Korea',
-        // Expand mapping as needed based on the IP geo API output
       };
-      
-      if (mapping[key]) {
-        key = mapping[key];
-      }
+
+      if (mapping[key]) key = mapping[key];
 
       counts[key] = (counts[key] || 0) + item.count;
-      if (counts[key] > max) {
-        max = counts[key];
-      }
+      if (counts[key] > max) max = counts[key];
     });
-    
+
     return { countryCounts: counts, maxCount: max > 0 ? max : 1 };
   }, [data]);
 
-  // Color scale: extremely low -> slate-100, low/medium -> warm gradient -> high -> red
-  // We use d3's scaleLinear to compute intermediate colors automatically.
   const colorScale = scaleLinear<string>()
     .domain([0, maxCount / 2, maxCount])
-    .range(["#fef3c7", "#f97316", "#ef4444"]); // amber-100 -> orange-500 -> red-500
+    .range(["#fef3c7", "#f97316", "#ef4444"]);
 
   return (
     <div className="w-full h-[400px] sm:h-[500px] relative rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shadow-inner">
@@ -74,45 +61,41 @@ export default function WorldMap({ data }: WorldMapProps) {
         <>
           <ComposableMap
             projectionConfig={{ scale: 140 }}
-            className="w-full h-full"
+            className="w-full h-full outline-none"
           >
-            <ZoomableGroup center={[0, 0]} zoom={1} minZoom={1} maxZoom={5}>
+            <ZoomableGroup center={[0, 0] as any} zoom={1} minZoom={1} maxZoom={5}>
               <Geographies geography={GEO_URL}>
-                {({ geographies }: { geographies: Array<{ rsmKey: string; properties: { name: string } }> }) =>
-                  geographies.map((geo) => {
+                {({ geographies }: { geographies: any[] }) =>
+                  geographies.map((geo, idx) => {
+                    if (!geo.properties) return null;
                     const countryName = geo.properties.name;
                     const val = countryCounts[countryName];
-                    const fill = val ? colorScale(val) : (isDark ? "#1e293b" : "#f1f5f9"); // slate-800 or slate-100
-                    
+                    const fill = val ? colorScale(val) : (isDark ? "#1e293b" : "#f1f5f9");
+
+                    // Contenu dynamique du tooltip
+                    const tooltipText = val
+                      ? `🌍 ${countryName}: ${val} threats`
+                      : `🌍 ${countryName}: No detected threats`;
+
                     return (
                       <Geography
-                        key={geo.rsmKey}
+                        key={geo.properties.name || idx}
                         geography={geo}
                         fill={fill}
-                        stroke={isDark ? "#334155" : "#cbd5e1"} // slate-700 or slate-300
+                        stroke={isDark ? "#334155" : "#cbd5e1"}
                         strokeWidth={0.5}
+                        // AJOUT DES ATTRIBUTS TOOLTIP ICI
+                        data-tooltip-id="world-map-tooltip"
+                        data-tooltip-content={tooltipText}
                         style={{
-                          default: { outline: "none", transition: "fill 0.2s ease" },
-                          hover: { 
-                            fill: val ? "#dc2626" : (isDark ? "#334155" : "#e2e8f0"), 
-                            outline: "none", 
-                            cursor: "pointer", 
-                            transition: "fill 0.1s ease" 
+                          default: { outline: "none", transition: "all 0.2s ease" },
+                          hover: {
+                            fill: val ? "#dc2626" : (isDark ? "#334155" : "#e2e8f0"),
+                            outline: "none",
+                            cursor: "pointer"
                           },
                           pressed: { outline: "none" }
                         }}
-                        onMouseEnter={() => {
-                          if (val) {
-                            setTooltipContent(`🌍 ${countryName}: ${val} threats`);
-                          } else {
-                            setTooltipContent(`🌍 ${countryName}: No detected threats`);
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          setTooltipContent('');
-                        }}
-                        data-tooltip-id="world-map-tooltip"
-                        data-tooltip-content={tooltipContent}
                       />
                     );
                   })
@@ -120,13 +103,11 @@ export default function WorldMap({ data }: WorldMapProps) {
               </Geographies>
             </ZoomableGroup>
           </ComposableMap>
-          
-          <Tooltip 
-            id="world-map-tooltip" 
-            place="top"
+
+          {/* CONFIGURATION SIMPLIFIÉE DE LA TOOLTIP */}
+          <Tooltip
+            id="world-map-tooltip"
             className="z-50 font-bold !bg-slate-900/95 backdrop-blur-sm !text-white !rounded-xl !px-4 !py-3 !text-sm shadow-2xl border border-slate-700/50"
-            content={tooltipContent}
-            isOpen={!!tooltipContent}
           />
 
           {/* Legend */}
@@ -137,7 +118,7 @@ export default function WorldMap({ data }: WorldMapProps) {
               <span>None</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-100 dark:bg-amber-900/50"></div>
+              <div className="w-3 h-3 rounded-full bg-amber-100"></div>
               <span>Low</span>
             </div>
             <div className="flex items-center gap-2">
@@ -146,7 +127,7 @@ export default function WorldMap({ data }: WorldMapProps) {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span>High ({maxCount > 1 ? `${maxCount}+` : '1+'})</span>
+              <span>High ({maxCount > 0 ? maxCount : 1}+)</span>
             </div>
           </div>
         </>

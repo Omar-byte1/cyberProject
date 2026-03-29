@@ -241,7 +241,7 @@ export default function Dashboard() {
           <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-5">🔥 Top Threats</h3>
           <div className="space-y-3">
             {topThreats.map((alert, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+              <div key={`${alert.cve_id}-${idx}`} className="flex items-center justify-between p-3 rounded-xl border border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
                 <div className="truncate pr-2">
                   <p className="font-bold text-slate-900 dark:text-slate-200 truncate">{alert.cve_id}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">{alert.soc_level || 'General'}</p>

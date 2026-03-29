@@ -49,9 +49,11 @@ export default function PlaybookExecutionPage() {
         
         if (!res.ok) throw new Error('Failed to fetch playbook details.');
         const data = await res.json();
-        setPhases(data);
-        if (data[0] && data[0].tasks[0]) {
-          setActiveTask(data[0].tasks[0].id);
+        if (Array.isArray(data)) {
+          setPhases(data);
+          if (data[0] && data[0].tasks && data[0].tasks[0]) {
+            setActiveTask(data[0].tasks[0].id);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -75,7 +77,7 @@ export default function PlaybookExecutionPage() {
     }
   };
 
-  const totalTasks = phases.reduce((acc, p) => acc + p.tasks.length, 0);
+  const totalTasks = phases.reduce((acc, p) => acc + (p.tasks?.length || 0), 0);
   const progress = totalTasks > 0 ? (completedTasks.length / totalTasks) * 100 : 0;
 
   if (loading) {
@@ -87,7 +89,7 @@ export default function PlaybookExecutionPage() {
      );
   }
 
-  const currentTaskData = phases.flatMap(p => p.tasks).find(t => t.id === activeTask);
+  const currentTaskData = phases.flatMap(p => p.tasks || []).find(t => t && t.id === activeTask);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -141,7 +143,7 @@ export default function PlaybookExecutionPage() {
               </h3>
               
               <div className="space-y-2">
-                {phase.tasks.map((task) => (
+                {phase.tasks?.map((task) => (
                   <div 
                     key={task.id}
                     onClick={() => setActiveTask(task.id)}
