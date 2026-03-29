@@ -11,10 +11,12 @@ import {
   Database,
   History,
   Info,
-  ExternalLink,
   Loader2,
-  Trash2
+  Trash2,
+  ExternalLink as DownloadIcon
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function IncidentsPage() {
@@ -22,6 +24,12 @@ export default function IncidentsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const modalRef = React.useRef<HTMLDivElement>(null);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [incidentsPerPage] = useState(5);
 
   useEffect(() => {
     fetchIncidents();
@@ -46,11 +54,72 @@ export default function IncidentsPage() {
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!modalRef.current) return;
+    setIsExporting(true);
+    const pdfModeClassName = 'pdf-mode';
+    
+    try {
+      modalRef.current.classList.add(pdfModeClassName);
+      
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      const canvas = await html2canvas(modalRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const imgWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add extra pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`Incident_Report_${selectedIncident.id}_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("PDF Export failed", err);
+      alert("Erreur lors de l'exportation PDF.");
+    } finally {
+      if (modalRef.current) modalRef.current.classList.remove(pdfModeClassName);
+      setIsExporting(false);
+    }
+  };
+
   const filteredIncidents = incidents.filter(inc => 
     inc.verdict.toLowerCase().includes(searchTerm.toLowerCase()) || 
     inc.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
     inc.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination Logic
+  const indexOfLastIncident = currentPage * incidentsPerPage;
+  const indexOfFirstIncident = indexOfLastIncident - incidentsPerPage;
+  const currentIncidents = filteredIncidents.slice(indexOfFirstIncident, indexOfLastIncident);
+  const totalPages = Math.ceil(filteredIncidents.length / incidentsPerPage) || 1;
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const stats = {
     total: incidents.length,
@@ -126,67 +195,93 @@ export default function IncidentsPage() {
              <p className="text-xs font-black uppercase tracking-widest text-slate-400">No incident records found</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredIncidents.map((incident) => (
-              <div 
-                key={incident.id} 
-                className="group p-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
-                onClick={() => setSelectedIncident(incident)}
-              >
-                <div className="flex items-center gap-8">
-                  {/* Status Badge */}
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${
-                    incident.risk_score >= 80 ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' : 
-                    incident.risk_score > 30 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
-                  }`}>
-                    {incident.risk_score >= 80 ? <ShieldAlert className="w-7 h-7" /> : <ShieldCheck className="w-7 h-7" />}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                       <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                         {incident.id}
-                       </span>
-                       <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">{incident.verdict}</h3>
+          <>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {currentIncidents.map((incident) => (
+                <div 
+                  key={incident.id} 
+                  className="group p-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
+                  onClick={() => setSelectedIncident(incident)}
+                >
+                  <div className="flex items-center gap-8">
+                    {/* Status Badge */}
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${
+                      incident.risk_score >= 80 ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' : 
+                      incident.risk_score > 30 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
+                    }`}>
+                      {incident.risk_score >= 80 ? <ShieldAlert className="w-7 h-7" /> : <ShieldCheck className="w-7 h-7" />}
                     </div>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                       <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          {new Date(incident.timestamp).toLocaleDateString()} at {new Date(incident.timestamp).toLocaleTimeString()}
-                       </div>
-                       <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                       <div className="flex items-center gap-1.5">
-                          <ShieldAlert className="w-3.5 h-3.5 opacity-50" />
-                          {incident.type}
-                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-8">
-                   <div className="text-right hidden md:block">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Risk Intensity</p>
-                      <div className="flex items-center gap-2">
-                         <div className="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${incident.risk_score}%` }} />
-                         </div>
-                         <span className="text-sm font-black text-slate-700 dark:text-slate-300">{incident.risk_score}%</span>
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                         <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                           {incident.id}
+                         </span>
+                         <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">{incident.verdict}</h3>
                       </div>
-                   </div>
-                   <button className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-all">
-                      <ChevronRight className="w-5 h-5" />
-                   </button>
+                      <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                         <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            {new Date(incident.timestamp).toLocaleDateString()} at {new Date(incident.timestamp).toLocaleTimeString()}
+                         </div>
+                         <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                         <div className="flex items-center gap-1.5">
+                            <ShieldAlert className="w-3.5 h-3.5 opacity-50" />
+                            {incident.type}
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-8">
+                     <div className="text-right hidden md:block">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Risk Intensity</p>
+                        <div className="flex items-center gap-2">
+                           <div className="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${incident.risk_score}%` }} />
+                           </div>
+                           <span className="text-sm font-black text-slate-700 dark:text-slate-300">{incident.risk_score}%</span>
+                        </div>
+                     </div>
+                     <button className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        <ChevronRight className="w-5 h-5" />
+                     </button>
+                  </div>
                 </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-100 dark:border-slate-800 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/30 dark:bg-slate-950/20">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                Showing {indexOfFirstIncident + 1}-{Math.min(indexOfLastIncident, filteredIncidents.length)} of {filteredIncidents.length} Records
+              </p>
+              <div className="flex items-center gap-3">
+                <button 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  className="px-6 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <div className="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl text-xs font-black shadow-lg">
+                  {currentPage} / {totalPages}
+                </div>
+                <button 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  className="px-6 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
-            ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
       {/* Incident Detail Modal */}
       {selectedIncident && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-300" onClick={() => setSelectedIncident(null)}>
-           <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+           <div ref={modalRef} id="report-content" className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
               
               <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20">
                  <div className="flex items-center gap-6">
@@ -247,8 +342,13 @@ export default function IncidentsPage() {
               </div>
 
               <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-4 bg-slate-50/50 dark:bg-slate-950/20">
-                 <button className="px-8 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 dark:text-white flex items-center gap-3">
-                    <ExternalLink className="w-4 h-4" /> Download Report
+                 <button 
+                    onClick={handleExportPDF}
+                    disabled={isExporting}
+                    className="px-8 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 dark:text-white flex items-center gap-3 hover:bg-slate-50 transition-all disabled:opacity-50"
+                  >
+                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadIcon className="w-4 h-4" />}
+                     {isExporting ? 'Exporting...' : 'Download Report'}
                  </button>
                  <button onClick={() => setSelectedIncident(null)} className="px-10 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
                     Close Case

@@ -1,5 +1,154 @@
 [
     {
+        "id": "INC-37199",
+        "type": "Binary Malware Analysis",
+        "verdict": "Malware D\u00e9tect\u00e9",
+        "risk_score": 95,
+        "timestamp": "2026-03-29T20:39:16.520Z",
+        "details": {
+            "type": "Binary Malware Analysis",
+            "risk_score": 95,
+            "verdict": "Malware D\u00e9tect\u00e9",
+            "family": "Pegasus.Lite",
+            "malware_type": "Spyware",
+            "recommendation": "Isoler la machine h\u00f4te imm\u00e9diatement et initier le playbook d'incident (Containment).",
+            "status": "Malicious",
+            "timestamp": "2026-03-29T21:39:11.499461",
+            "indicators": [
+                {
+                    "type": "Signature",
+                    "detail": "Match: Pegasus.Lite",
+                    "risk": "Critical"
+                },
+                {
+                    "type": "Behavior",
+                    "detail": "Spyware",
+                    "risk": "High"
+                },
+                {
+                    "type": "Entropy",
+                    "detail": "7.41 (Packed/Obfuscated)",
+                    "risk": "High"
+                }
+            ],
+            "behavior_logs": [
+                "[SYSTEM] Process started (PID: 5458)",
+                "[FS] Created file: C:\\Windows\\Temp\\pegasus.lite.tmp",
+                "[REG] Registry Key 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SysUpdate' modified",
+                "[NET] Connection attempt to C2 Server (8.8.4.4:443)",
+                "[API] Call detected: CryptEncrypt (Sensitive API call)",
+                "[THREAT] Microphone Access",
+                "[THREAT] GPS Tracking",
+                "[THREAT] Exfiltration via HTTPS"
+            ],
+            "mitre_attack": [
+                {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter"
+                },
+                {
+                    "id": "T1547",
+                    "name": "Boot or Logon Autostart Execution"
+                },
+                {
+                    "id": "T1027",
+                    "name": "Obfuscated Files or Information"
+                }
+            ]
+        }
+    },
+    {
+        "id": "INC-68168",
+        "type": "Binary Malware Analysis",
+        "verdict": "Malware D\u00e9tect\u00e9",
+        "risk_score": 95,
+        "timestamp": "2026-03-29T20:32:50.094Z",
+        "details": {
+            "type": "Binary Malware Analysis",
+            "risk_score": 95,
+            "verdict": "Malware D\u00e9tect\u00e9",
+            "family": "Pegasus.Lite",
+            "malware_type": "Spyware",
+            "recommendation": "Isoler la machine h\u00f4te imm\u00e9diatement et initier le playbook d'incident (Containment).",
+            "status": "Malicious",
+            "timestamp": "2026-03-29T21:31:39.496010",
+            "indicators": [
+                {
+                    "type": "Signature",
+                    "detail": "Match: Pegasus.Lite",
+                    "risk": "Critical"
+                },
+                {
+                    "type": "Behavior",
+                    "detail": "Spyware",
+                    "risk": "High"
+                },
+                {
+                    "type": "Entropy",
+                    "detail": "7.28 (Packed/Obfuscated)",
+                    "risk": "High"
+                }
+            ],
+            "behavior_logs": [
+                "[SYSTEM] Process started (PID: 2819)",
+                "[FS] Created file: C:\\Windows\\Temp\\pegasus.lite.tmp",
+                "[REG] Registry Key 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SysUpdate' modified",
+                "[NET] Connection attempt to C2 Server (8.8.4.4:443)",
+                "[API] Call detected: CryptEncrypt (Sensitive API call)",
+                "[THREAT] Microphone Access",
+                "[THREAT] GPS Tracking",
+                "[THREAT] Exfiltration via HTTPS"
+            ],
+            "mitre_attack": [
+                {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter"
+                },
+                {
+                    "id": "T1547",
+                    "name": "Boot or Logon Autostart Execution"
+                },
+                {
+                    "id": "T1027",
+                    "name": "Obfuscated Files or Information"
+                }
+            ]
+        }
+    },
+    {
+        "id": "INC-16771",
+        "type": "Binary Malware Analysis",
+        "verdict": "Fichier Sain",
+        "risk_score": 3,
+        "timestamp": "2026-03-29T19:49:53.093Z",
+        "details": {
+            "type": "Binary Malware Analysis",
+            "risk_score": 3,
+            "verdict": "Fichier Sain",
+            "recommendation": "Aucune menace d\u00e9tect\u00e9e. Le fichier peut \u00eatre ouvert en s\u00e9curit\u00e9.",
+            "status": "Clean",
+            "timestamp": "2026-03-29T20:49:43.301481",
+            "indicators": [
+                {
+                    "type": "Signature",
+                    "detail": "Aucune correspondance trouv\u00e9e",
+                    "risk": "Low"
+                },
+                {
+                    "type": "Heuristic",
+                    "detail": "Comportement normal d\u00e9tect\u00e9",
+                    "risk": "Low"
+                }
+            ],
+            "behavior_logs": [
+                "[SYSTEM] Process started (PID: 1204)",
+                "[FS] Reading local configuration files",
+                "[API] Normal Windows API usage detected",
+                "[SYSTEM] Process exited gracefully (Code 0)"
+            ]
+        }
+    },
+    {
         "id": "INC-66764",
         "type": "Email Phishing Analysis",
         "verdict": "Sain",

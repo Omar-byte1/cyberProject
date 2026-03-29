@@ -32,33 +32,55 @@ export default function SandboxReport({ data }: SandboxReportProps) {
   if (!data) return null;
 
   const handleExportPDF = async () => {
-    if (!reportRef.current) return;
+    const reportElement = reportRef.current;
+    if (!reportElement) return;
+    
     setIsExporting(true);
+    const pdfModeClassName = 'pdf-mode';
     
     try {
-      const canvas = await html2canvas(reportRef.current, {
+      // Force plain colors/styles for html2canvas compatibility
+      reportElement.classList.add(pdfModeClassName);
+      
+      // Wait for the DOM to update styles
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      const canvas = await html2canvas(reportElement, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#0f172a' // Slate-900 matching
+        backgroundColor: '#ffffff', // Use white background for PDF
+        logging: false
       });
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
       
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Forensic_Report_${data.verdict}_${Date.now()}.pdf`);
+      const imgWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add the first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add subsequent pages if the content is longer than one A4
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`Forensic_Report_${data.verdict || 'Analysis'}_${Date.now()}.pdf`);
     } catch (err) {
       console.error("PDF Export failed", err);
-      alert("Erreur lors de l'exportation PDF.");
+      alert("Erreur lors de l'exportation PDF. Veuillez réessayer.");
     } finally {
+      if (reportElement) reportElement.classList.remove(pdfModeClassName);
       setIsExporting(false);
     }
   };
@@ -105,7 +127,7 @@ export default function SandboxReport({ data }: SandboxReportProps) {
   return (
     <div className="space-y-6">
       
-      <div ref={reportRef} className="animate-in fade-in slide-in-from-bottom-5 duration-700 p-1">
+      <div ref={reportRef} id="report-content" className="animate-in fade-in slide-in-from-bottom-5 duration-700 p-1">
         {/* Summary Header */}
         <div className={`p-8 rounded-[2.5rem] border ${
           isMalicious 

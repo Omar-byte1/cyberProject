@@ -43,4 +43,6 @@ body {
   box-shadow: none !important;
   text-shadow: none !important;
   filter: none !important;
+  height: auto !important;
+  overflow: visible !important;
 }
